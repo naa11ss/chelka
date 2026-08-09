@@ -3,6 +3,7 @@ import ChelkaCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var themeController: ThemeController!
+    private var clipboardService: ClipboardService!
     private var notchController: NotchController!
     private var statusItemController: StatusItemController!
 
@@ -10,13 +11,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.app.info("Chelka запущена, версия \(AppInfo.versionString, privacy: .public)")
 
         themeController = ThemeController()
-        notchController = NotchController(theme: themeController)
+        clipboardService = ClipboardService()
+        notchController = NotchController(theme: themeController, clipboard: clipboardService)
         statusItemController = StatusItemController(
             theme: themeController,
             onToggleNotch: { [weak self] in self?.notchController.toggleFromMenu() }
         )
 
+        clipboardService.start()
         notchController.start()
+
+        // ⌥⌘V открывает виджет на истории буфера.
+        HotkeyCenter.shared.register(HotkeyCenter.defaultBinding) { [weak self] in
+            self?.notchController.openPinned()
+        }
+
+        if CommandLine.arguments.contains("--clipboard-demo") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [clipboardService] in
+                ClipboardDemo.run(service: clipboardService!)
+            }
+        }
 
         if CommandLine.arguments.contains("--hover-demo") {
             // Даём панели встать на место, потом прогоняем сценарий.
@@ -27,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        clipboardService?.stop()
         notchController?.stop()
         Log.app.info("Chelka завершается")
     }

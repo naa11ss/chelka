@@ -8,6 +8,7 @@ import ChelkaCore
 /// изменение фрейма `NSWindow` в такт анимации даёт рывки.
 struct NotchRootView: View {
     @ObservedObject var model: NotchViewModel
+    @ObservedObject var clipboard: ClipboardService
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -58,9 +59,11 @@ struct NotchRootView: View {
             }
             .overlay {
                 if model.state == .expanded {
-                    ExpandedContentView()
+                    ExpandedContentView(clipboard: clipboard)
                         .padding(.horizontal, DS.flare + DS.contentPadding)
-                        .padding(.top, DS.contentPadding * 0.7)
+                        // Верхнюю полосу занимает сам вырез (или меню-бар):
+                        // содержимое под ней физически не видно.
+                        .padding(.top, topInset)
                         .padding(.bottom, DS.contentPadding)
                         .transition(.opacity)
                 }
@@ -69,6 +72,11 @@ struct NotchRootView: View {
             // В свёрнутом виде на экране с вырезом виджет не рисуется вовсе —
             // сам вырез и есть его свёрнутое состояние.
             .opacity(model.state == .expanded ? 1 : 0)
+    }
+
+    /// Высота непригодной для содержимого полосы сверху.
+    private var topInset: CGFloat {
+        model.layout.collapsedRectScreen.height + 6
     }
 
     // MARK: - Геометрия

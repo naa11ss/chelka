@@ -30,6 +30,12 @@ diagnose: build ## Показать, что приложение видит на
 hover-demo: build stop ## Прогнать сценарий наведения и сверить состояния
 	@.build/debug/Chelka --hover-demo
 
+clipboard-demo: build stop ## Сквозная проверка буфера на живой системе
+	@.build/debug/Chelka --clipboard-demo
+
+verify: test hover-demo clipboard-demo snapshots ## Все проверки разом
+	@echo "все проверки пройдены"
+
 check: test ## Полная проверка перед коммитом
 	@CONFIG=debug bash scripts/build-app.sh >/dev/null
 	@echo "проверка пройдена"

@@ -52,7 +52,7 @@ public struct NotchMetrics: Sendable, Equatable {
     public var hoverInset: CGFloat
 
     public init(
-        expandedSize: CGSize = CGSize(width: 640, height: 156),
+        expandedSize: CGSize = CGSize(width: 720, height: 272),
         syntheticDiameter: CGFloat = 22,
         panelPadding: CGFloat = 24,
         hoverInset: CGFloat = 4

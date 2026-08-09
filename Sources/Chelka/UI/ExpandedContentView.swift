@@ -1,35 +1,47 @@
 import SwiftUI
+import ChelkaCore
 
 /// Содержимое раскрытого виджета.
 ///
-/// На этом этапе три блока — заглушки с финальной раскладкой: музыка слева,
-/// метрики по центру, буфер справа. Следующие этапы заменяют внутренности
-/// каждой карточки, не трогая композицию.
+/// Два ряда: сверху музыка и метрики, снизу лента буфера во всю ширину.
+/// Буфер — то, ради чего виджет открывают чаще всего, поэтому ему
+/// отдана целая строка, а не треть.
 struct ExpandedContentView: View {
+    @ObservedObject var clipboard: ClipboardService
+
     var body: some View {
-        HStack(spacing: DS.cardSpacing) {
-            MusicPlaceholder()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: DS.cardSpacing) {
+            HStack(spacing: DS.cardSpacing) {
+                MusicPlaceholder()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            MetricsPlaceholder()
-                .frame(width: 158)
+                MetricsPlaceholder()
+                    .frame(width: 168)
+            }
+            .frame(height: 78)
 
-            ClipboardPlaceholder()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ClipboardPane(service: clipboard)
+                .padding(10)
+                .background(Color.notchCard, in: RoundedRectangle(cornerRadius: DS.cardRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: DS.cardRadius, style: .continuous)
+                        .strokeBorder(Color.notchStroke, lineWidth: 1)
+                }
+                .frame(maxHeight: .infinity)
         }
     }
 }
 
 // MARK: - Карточка
 
-private struct Card<Content: View>: View {
+struct Card<Content: View>: View {
     let title: String
     let systemImage: String
-    let stage: String
+    let stage: String?
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage)
                     .font(.system(size: 10, weight: .semibold))
@@ -39,10 +51,12 @@ private struct Card<Content: View>: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 4)
-                Text(stage)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(Color.notchTertiary)
-                    .lineLimit(1)
+                if let stage {
+                    Text(stage)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(Color.notchTertiary)
+                        .lineLimit(1)
+                }
             }
             .foregroundStyle(Color.notchSecondary)
 
@@ -58,37 +72,37 @@ private struct Card<Content: View>: View {
     }
 }
 
-// MARK: - Заглушки этапов
+// MARK: - Заглушки следующих этапов
 
 private struct MusicPlaceholder: View {
     var body: some View {
         Card(title: "Музыка", systemImage: "music.note", stage: "этап 4") {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.notchCard)
                     .overlay {
                         Image(systemName: "music.note")
-                            .font(.system(size: 18))
+                            .font(.system(size: 15))
                             .foregroundStyle(Color.notchTertiary)
                     }
-                    .frame(width: 64, height: 64)
+                    .frame(width: 44, height: 44)
 
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Ничего не играет")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.notchPrimary)
                     Text("Music · Spotify")
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                         .foregroundStyle(Color.notchSecondary)
 
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         ForEach(["backward.fill", "play.fill", "forward.fill"], id: \.self) { symbol in
                             Image(systemName: symbol)
-                                .font(.system(size: 12))
+                                .font(.system(size: 11))
                                 .foregroundStyle(Color.notchTertiary)
                         }
                     }
-                    .padding(.top, 2)
+                    .padding(.top, 1)
                 }
                 Spacer(minLength: 0)
             }
@@ -99,59 +113,29 @@ private struct MusicPlaceholder: View {
 private struct MetricsPlaceholder: View {
     var body: some View {
         Card(title: "Система", systemImage: "gauge.medium", stage: "этап 3") {
-            VStack(spacing: 7) {
-                MetricRow(label: "CPU", value: "—")
-                MetricRow(label: "RAM", value: "—")
-                MetricRow(label: "Темп.", value: "—")
+            HStack(spacing: 10) {
+                MetricColumn(label: "CPU", value: "—")
+                MetricColumn(label: "RAM", value: "—")
+                MetricColumn(label: "°C", value: "—")
             }
-            .padding(.top, 2)
+            .frame(maxWidth: .infinity)
         }
     }
 }
 
-private struct MetricRow: View {
+private struct MetricColumn: View {
     let label: String
     let value: String
 
     var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.notchSecondary)
-            Spacer(minLength: 0)
+        VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                .font(.system(size: 13, weight: .semibold).monospacedDigit())
                 .foregroundStyle(Color.notchPrimary)
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundStyle(Color.notchSecondary)
         }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.notchStroke)
-                .frame(height: 1)
-                .offset(y: 5)
-        }
-    }
-}
-
-private struct ClipboardPlaceholder: View {
-    var body: some View {
-        Card(title: "Буфер", systemImage: "doc.on.clipboard", stage: "этап 2") {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    ForEach(0..<5, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.notchCard)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.notchStroke, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                            }
-                            .frame(height: 40)
-                    }
-                }
-                Text("История появится здесь: 10 записей + 5 закреплённых")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.notchTertiary)
-                    .lineLimit(2)
-            }
-        }
+        .frame(maxWidth: .infinity)
     }
 }

@@ -19,12 +19,12 @@ enum ChelkaMain {
                 ? CommandLine.arguments[index + 1]
                 : "./snapshots"
             app.setActivationPolicy(.prohibited)
-            SnapshotTool.run(outputDirectory: output)
+            MainActor.assumeIsolated { SnapshotTool.run(outputDirectory: output) }
         }
 
         if CommandLine.arguments.contains("--diagnose") {
             app.setActivationPolicy(.prohibited)
-            Diagnostics.run()
+            MainActor.assumeIsolated { Diagnostics.run() }
         }
 
         app.delegate = delegate

@@ -24,6 +24,15 @@ final class NotchController {
     private var cancellables = Set<AnyCancellable>()
     private var screenChangeDebounce: DispatchWorkItem?
 
+    /// Временные сочетания «1…9» и Esc, живущие только пока виджет
+    /// открыт хоткеем. Регистрировать их постоянно нельзя — цифры
+    /// перестали бы набираться во всей системе.
+    private var quickPickHotkeys: [UInt32] = []
+    /// Закреплённое раскрытие само закрывается: забытый открытым виджет
+    /// не должен вечно перехватывать цифры.
+    private var pinnedAutoCloseTimer: Timer?
+    private static let pinnedAutoCloseDelay: TimeInterval = 15
+
     private var layout: NotchLayout
 
     /// Источник позиции курсора. Подменяется в сценарных прогонах:
@@ -32,8 +41,11 @@ final class NotchController {
     /// ту же позицию, что и обработчик событий — иначе они спорят.
     var cursorProvider: () -> NSPoint = { NSEvent.mouseLocation }
 
-    init(theme: ThemeController) {
+    private let clipboard: ClipboardService
+
+    init(theme: ThemeController, clipboard: ClipboardService) {
         self.theme = theme
+        self.clipboard = clipboard
         let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
         self.layout = NotchGeometry.layout(for: metrics)
         self.viewModel = NotchViewModel(layout: layout)
@@ -67,6 +79,8 @@ final class NotchController {
     }
 
     func stop() {
+        unregisterQuickPickHotkeys()
+        pinnedAutoCloseTimer?.invalidate()
         hoverMonitor.stop()
         pendingTimer?.invalidate()
         pendingTimer = nil
@@ -78,11 +92,83 @@ final class NotchController {
     /// повторный вызов снимает закрепление.
     func toggleFromMenu() {
         if stateMachine.isPinned {
-            stateMachine.unpin(inside: isCursorInside(cursorProvider()), now: MonotonicClock.now)
+            closePinned()
         } else {
-            stateMachine.pinOpen()
+            openPinned()
+        }
+    }
+
+    /// Открытие по глобальному сочетанию: раскрываем, закрепляем
+    /// и включаем выбор записи цифрами.
+    func openPinned() {
+        guard !stateMachine.isPinned else { return }
+
+        stateMachine.pinOpen()
+        applyState(animated: true)
+        registerQuickPickHotkeys()
+        scheduleAutoClose()
+
+        Log.notch.info("виджет открыт хоткеем")
+    }
+
+    func closePinned() {
+        unregisterQuickPickHotkeys()
+        pinnedAutoCloseTimer?.invalidate()
+        pinnedAutoCloseTimer = nil
+
+        stateMachine.unpin(inside: isCursorInside(cursorProvider()), now: MonotonicClock.now)
+        if !isCursorInside(cursorProvider()) {
+            stateMachine.forceCollapse()
         }
         applyState(animated: true)
+    }
+
+    // MARK: - Быстрый выбор с клавиатуры
+
+    /// Раскладка цифрового ряда в кодах клавиш: порядок не совпадает
+    /// с числовым, 6 и 7 идут не подряд.
+    private static let digitKeyCodes: [UInt32] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    private func registerQuickPickHotkeys() {
+        unregisterQuickPickHotkeys()
+
+        for (index, keyCode) in Self.digitKeyCodes.enumerated() {
+            let binding = HotkeyCenter.Binding(keyCode: keyCode, modifiers: 0)
+            let id = HotkeyCenter.shared.register(binding, action: { [weak self] in
+                self?.pickItem(at: index)
+            })
+            if let id { quickPickHotkeys.append(id) }
+        }
+
+        // Escape закрывает.
+        let escape = HotkeyCenter.Binding(keyCode: 53, modifiers: 0)
+        let escapeID = HotkeyCenter.shared.register(escape, action: { [weak self] in
+            self?.closePinned()
+        })
+        if let escapeID { quickPickHotkeys.append(escapeID) }
+    }
+
+    private func unregisterQuickPickHotkeys() {
+        for id in quickPickHotkeys { HotkeyCenter.shared.unregister(id) }
+        quickPickHotkeys.removeAll()
+    }
+
+    private func pickItem(at index: Int) {
+        let items = clipboard.history.items
+        guard index < items.count else { return }
+
+        clipboard.copyToPasteboard(id: items[index].id)
+        closePinned()
+    }
+
+    private func scheduleAutoClose() {
+        pinnedAutoCloseTimer?.invalidate()
+
+        let timer = Timer(timeInterval: Self.pinnedAutoCloseDelay, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closePinned() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pinnedAutoCloseTimer = timer
     }
 
     // MARK: - Окно
@@ -93,7 +179,7 @@ final class NotchController {
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
 
-        let root = NotchRootView(model: viewModel)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]

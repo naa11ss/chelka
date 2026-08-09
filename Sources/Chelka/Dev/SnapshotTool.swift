@@ -8,6 +8,7 @@ import ChelkaCore
 /// в обоих состояниях и на обоих типах экранов — без живого монитора,
 /// без разрешения «Запись экрана» и без человека у клавиатуры.
 /// Тот же механизм годится для визуальных регрессий в CI.
+@MainActor
 enum SnapshotTool {
 
     struct Case {
@@ -17,13 +18,14 @@ enum SnapshotTool {
         let appearance: NSAppearance.Name
     }
 
-    /// MacBook Air M2: 1470×956 pt, вырез 32 pt.
+    /// MacBook Air M2 при масштабе «больше места»: 1710×1112 pt, вырез 209×38.
+    /// Значения сняты с живой машины через `--diagnose`.
     static let builtIn = ScreenMetrics(
-        frame: CGRect(x: 0, y: 0, width: 1470, height: 956),
-        safeAreaTop: 32,
-        auxiliaryLeftWidth: 651,
-        auxiliaryRightWidth: 651,
-        menuBarHeight: 24
+        frame: CGRect(x: 0, y: 0, width: 1710, height: 1112),
+        safeAreaTop: 38,
+        auxiliaryLeftWidth: 751,
+        auxiliaryRightWidth: 750,
+        menuBarHeight: 22
     )
 
     /// Внешний монитор без выреза.
@@ -73,6 +75,10 @@ enum SnapshotTool {
         exit(failures == 0 ? 0 : 1)
     }
 
+    /// Один общий сервис на все снимки: пересоздавать демо-данные
+    /// для каждого кадра незачем.
+    private static let demoClipboard = ClipboardService.makeDemo()
+
     private static func render(_ testCase: Case, to url: URL) -> Bool {
         let layout = NotchGeometry.layout(for: testCase.metrics)
         let model = NotchViewModel(layout: layout)
@@ -80,7 +86,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model)
+            NotchRootView(model: model, clipboard: demoClipboard)
         }
 
         let hosting = NSHostingView(rootView: root)
@@ -94,7 +100,7 @@ enum SnapshotTool {
         guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return false }
         hosting.cacheDisplay(in: hosting.bounds, to: rep)
 
-        guard let data = rep.representation(using: .png, properties: [:]) else { return false }
+        guard let data = rep.representation(using: NSBitmapImageRep.FileType.png, properties: [:]) else { return false }
         do {
             try data.write(to: url)
             return true
