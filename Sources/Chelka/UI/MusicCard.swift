@@ -9,6 +9,12 @@ struct MusicCard: View {
     /// Тикает раз в секунду, чтобы полоска ползла между опросами плеера.
     @State private var clock = MonotonicClock.now
 
+    /// Какое направление сейчас подсвечено после свайпа, и токен,
+    /// отличающий текущую вспышку от предыдущей — иначе таймер угасания
+    /// быстрого второго свайпа погасил бы стрелку раньше времени.
+    @State private var swipeFlash: SwipeDirection?
+    @State private var swipeFlashToken = UUID()
+
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -25,8 +31,47 @@ struct MusicCard: View {
 
                 Spacer(minLength: 0)
             }
+            // В .background(), не в .overlay(): SwiftUI кладёт содержимое
+            // поверх фона, поэтому клики по кнопкам управления долетают
+            // до них раньше, чем до этого перехватчика скролла.
+            .background(TrackSwipeCatcher(onSwipe: handleSwipe))
+            .overlay { swipeFlashView }
         }
         .onReceive(ticker) { _ in clock = MonotonicClock.now }
+    }
+
+    // MARK: - Свайп
+
+    private func handleSwipe(_ direction: SwipeDirection) {
+        switch direction {
+        case .next: service.next()
+        case .previous: service.previous()
+        }
+
+        let token = UUID()
+        swipeFlashToken = token
+        withAnimation(NotchAnimation.content) { swipeFlash = direction }
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            await MainActor.run {
+                guard swipeFlashToken == token else { return }
+                withAnimation(NotchAnimation.content) { swipeFlash = nil }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var swipeFlashView: some View {
+        if let swipeFlash {
+            Image(systemName: swipeFlash == .next ? "chevron.right" : "chevron.left")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(.black.opacity(0.45), in: Circle())
+                .transition(.opacity)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Части

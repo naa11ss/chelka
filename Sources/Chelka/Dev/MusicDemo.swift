@@ -123,7 +123,25 @@ enum MusicDemo {
         }
         print("")
 
-        // 6. Опрос обязан останавливаться.
+        // 6. Логика жеста свайпа: без реального трекпада, но проверяет
+        // саму связку «дельты скролла → решение», которую AppKit-слой
+        // напрямую передаёт в service.next()/previous().
+        var gesture = TrackSwipeGesture()
+        gesture.began()
+        let leftSwipe = gesture.changed(deltaX: -70)
+        check("свайп влево распознаётся как «следующий»", leftSwipe == .next, detail: String(describing: leftSwipe))
+
+        gesture = TrackSwipeGesture()
+        gesture.began()
+        let rightSwipe = gesture.changed(deltaX: 70)
+        check("свайп вправо распознаётся как «предыдущий»", rightSwipe == .previous, detail: String(describing: rightSwipe))
+
+        print("")
+        print("  живой трекпад не проверялся — нужен реальный жест пользователя")
+        print("  направление (влево=вперёд) подобрано по аналогии со свайпом Safari,")
+        print("  не проверено на железе; если перепутано — поменять местами два case в TrackSwipeGesture")
+
+        // 7. Опрос обязан останавливаться.
         service.startPolling(interval: 0.5)
         settle(0.3)
         let wasPolling = service.isPolling
