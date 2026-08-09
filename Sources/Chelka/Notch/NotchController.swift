@@ -26,6 +26,12 @@ final class NotchController {
 
     private var layout: NotchLayout
 
+    /// Источник позиции курсора. Подменяется в сценарных прогонах:
+    /// синтезировать настоящие события мыши нельзя без разрешения
+    /// «Универсальный доступ», а таймер дозревания обязан опрашивать
+    /// ту же позицию, что и обработчик событий — иначе они спорят.
+    var cursorProvider: () -> NSPoint = { NSEvent.mouseLocation }
+
     init(theme: ThemeController) {
         self.theme = theme
         let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
@@ -53,6 +59,10 @@ final class NotchController {
             .sink { [weak self] _ in self?.applyTheme() }
             .store(in: &cancellables)
 
+        // Курсор может уже стоять на вырезе к моменту запуска — событий движения
+        // тогда не будет, и виджет остался бы свёрнутым до первого шевеления мышью.
+        handleMouseMoved(to: cursorProvider())
+
         Log.notch.info("виджет запущен, тип выреза: \(String(describing: self.layout.kind), privacy: .public)")
     }
 
@@ -68,7 +78,7 @@ final class NotchController {
     /// повторный вызов снимает закрепление.
     func toggleFromMenu() {
         if stateMachine.isPinned {
-            stateMachine.unpin(inside: isCursorInside(NSEvent.mouseLocation), now: MonotonicClock.now)
+            stateMachine.unpin(inside: isCursorInside(cursorProvider()), now: MonotonicClock.now)
         } else {
             stateMachine.pinOpen()
         }
@@ -129,6 +139,19 @@ final class NotchController {
 
     // MARK: - Курсор и состояние
 
+    /// Подача позиции курсора в обход системы — для сценарных проверок
+    /// (`--hover-demo`). Синтезировать настоящие события мыши нельзя без
+    /// разрешения «Универсальный доступ», а проверять связку надо.
+    func simulateCursor(at point: NSPoint) {
+        handleMouseMoved(to: point)
+    }
+
+    /// Текущее состояние — для проверок и отладки.
+    var currentState: NotchState { stateMachine.state }
+
+    /// Раскладка на текущем экране.
+    var currentLayout: NotchLayout { layout }
+
     private func handleMouseMoved(to point: NSPoint) {
         let inside = isCursorInside(point)
         let previous = stateMachine.state
@@ -158,7 +181,7 @@ final class NotchController {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     let previous = self.stateMachine.state
-                    let next = self.stateMachine.update(inside: self.isCursorInside(NSEvent.mouseLocation), now: MonotonicClock.now)
+                    let next = self.stateMachine.update(inside: self.isCursorInside(self.cursorProvider()), now: MonotonicClock.now)
                     if next != previous { self.applyState(animated: true) }
                     self.syncPendingTimer()
                 }
@@ -173,6 +196,7 @@ final class NotchController {
 
     private func applyState(animated: Bool) {
         updateInteractiveRect()
+        Log.notch.info("состояние: \(String(describing: self.stateMachine.state), privacy: .public)")
 
         if animated {
             withAnimation(NotchAnimation.morph) {

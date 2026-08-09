@@ -27,6 +27,9 @@ snapshots: build ## Отрендерить виды в docs/snapshots (обе т
 diagnose: build ## Показать, что приложение видит на этой машине
 	@.build/debug/Chelka --diagnose
 
+hover-demo: build stop ## Прогнать сценарий наведения и сверить состояния
+	@.build/debug/Chelka --hover-demo
+
 check: test ## Полная проверка перед коммитом
 	@CONFIG=debug bash scripts/build-app.sh >/dev/null
 	@echo "проверка пройдена"

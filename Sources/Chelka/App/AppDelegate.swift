@@ -17,6 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         notchController.start()
+
+        if CommandLine.arguments.contains("--hover-demo") {
+            // Даём панели встать на место, потом прогоняем сценарий.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [notchController] in
+                HoverDemo.run(controller: notchController!)
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
