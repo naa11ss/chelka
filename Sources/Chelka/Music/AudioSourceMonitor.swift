@@ -9,6 +9,10 @@ struct AudioSource: Equatable {
     let name: String
     /// Что именно звучит, если это удалось узнать — например, вкладка браузера.
     var detail: String?
+    /// Адрес страницы, по которому можно найти обложку.
+    var pageURL: URL?
+    /// Прямой адрес обложки, если браузер сообщил его сам.
+    var artworkURL: URL?
 
     var icon: NSImage? {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
@@ -178,14 +182,32 @@ enum AudioSourceMonitor {
 /// проходит молча — виджет просто покажет имя приложения.
 enum BrowserTabTitle {
 
+    /// Заголовок и адрес забираем одним скриптом: каждый запуск osascript
+    /// стоит запуска процесса, делать это дважды подряд незачем.
     private static let scripts: [String: String] = [
-        "com.apple.Safari": "tell application \"Safari\" to return name of current tab of front window",
-        "com.google.Chrome": "tell application \"Google Chrome\" to return title of active tab of front window",
-        "com.microsoft.edgemac": "tell application \"Microsoft Edge\" to return title of active tab of front window",
-        "com.brave.Browser": "tell application \"Brave Browser\" to return title of active tab of front window",
-        "ru.yandex.desktop.yandex-browser": "tell application \"Yandex\" to return title of active tab of front window",
-        "com.operasoftware.Opera": "tell application \"Opera\" to return title of active tab of front window",
+        "com.apple.Safari": safariScript,
+        "com.google.Chrome": chromiumScript("Google Chrome"),
+        "com.microsoft.edgemac": chromiumScript("Microsoft Edge"),
+        "com.brave.Browser": chromiumScript("Brave Browser"),
+        "ru.yandex.desktop.yandex-browser": chromiumScript("Yandex"),
+        "com.operasoftware.Opera": chromiumScript("Opera"),
     ]
+
+    private static let safariScript = """
+    tell application "Safari"
+        set t to current tab of front window
+        return (name of t) & linefeed & (URL of t)
+    end tell
+    """
+
+    private static func chromiumScript(_ appName: String) -> String {
+        """
+        tell application "\(appName)"
+            set t to active tab of front window
+            return (title of t) & linefeed & (URL of t)
+        end tell
+        """
+    }
 
     static func isBrowser(_ bundleID: String) -> Bool {
         scripts[bundleID] != nil
@@ -200,7 +222,12 @@ enum BrowserTabTitle {
     nonisolated(unsafe) private static var backoffUntil: [String: Date] = [:]
     private static let backoffInterval: TimeInterval = 120
 
-    static func title(for bundleID: String) -> String? {
+    struct Tab: Equatable {
+        let title: String
+        let url: URL?
+    }
+
+    static func currentTab(for bundleID: String) -> Tab? {
         guard let script = scripts[bundleID] else { return nil }
         guard AppleScriptBridge.isRunning(bundleID: bundleID) else { return nil }
 
@@ -211,15 +238,20 @@ enum BrowserTabTitle {
         if let blockedUntil, blockedUntil > Date() { return nil }
 
         switch AppleScriptBridge.run(script, timeout: 1.5) {
-        case .success(let title) where !title.isEmpty:
-            return clean(title)
+        case .success(let output) where !output.isEmpty:
+            let lines = output.components(separatedBy: .newlines)
+            let title = clean(lines.first ?? "")
+            guard !title.isEmpty else { return nil }
+
+            let url = lines.count > 1 ? URL(string: lines[1].trimmingCharacters(in: .whitespaces)) : nil
+            return Tab(title: title, url: url)
 
         case .failure(let failure):
             if failure == .automationDenied || failure == .timedOut {
                 backoffLock.lock()
                 backoffUntil[bundleID] = Date().addingTimeInterval(backoffInterval)
                 backoffLock.unlock()
-                Log.media.info("заголовок вкладки \(bundleID, privacy: .public) недоступен, пауза \(Int(backoffInterval)) с")
+                Log.media.info("вкладка \(bundleID, privacy: .public) недоступна, пауза \(Int(backoffInterval)) с")
             }
             return nil
 

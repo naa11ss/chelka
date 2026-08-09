@@ -12,6 +12,7 @@ final class ClipboardSettings: ObservableObject {
         static let blacklist = "chelka.clipboard.blacklist"
         static let skipConcealed = "chelka.clipboard.skipConcealed"
         static let captureScreenshots = "chelka.clipboard.captureScreenshots"
+        static let fetchBrowserArtwork = "chelka.music.fetchBrowserArtwork"
     }
 
     private let defaults: UserDefaults
@@ -32,11 +33,20 @@ final class ClipboardSettings: ObservableObject {
         didSet { defaults.set(captureScreenshots, forKey: Keys.captureScreenshots) }
     }
 
+    /// Ходить в сеть за обложкой того, что играет в браузере.
+    ///
+    /// Единственное место, где приложение обращается к сети, поэтому
+    /// переключатель отдельный и заметный.
+    @Published var fetchBrowserArtwork: Bool {
+        didSet { defaults.set(fetchBrowserArtwork, forKey: Keys.fetchBrowserArtwork) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.blacklist = Set(defaults.stringArray(forKey: Keys.blacklist) ?? [])
         self.skipConcealed = defaults.bool(forKey: Keys.skipConcealed)
         self.captureScreenshots = defaults.object(forKey: Keys.captureScreenshots) as? Bool ?? true
+        self.fetchBrowserArtwork = defaults.object(forKey: Keys.fetchBrowserArtwork) as? Bool ?? true
     }
 
     func isBlacklisted(_ bundleID: String) -> Bool {

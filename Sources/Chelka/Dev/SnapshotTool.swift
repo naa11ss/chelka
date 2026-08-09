@@ -87,7 +87,7 @@ enum SnapshotTool {
     /// для каждого кадра незачем.
     private static let demoClipboard = ClipboardService.makeDemo()
     private static let demoMetrics = MetricsService()
-    private static let demoMusic = MusicService()
+    private static let demoMusic = MusicService(settings: ClipboardSettings())
 
     private static func render(_ testCase: Case, to url: URL) -> Bool {
         let layout = NotchGeometry.layout(for: testCase.metrics)

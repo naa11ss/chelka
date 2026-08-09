@@ -35,6 +35,13 @@ final class MusicService: ObservableObject {
     private var isQuerying = false
 
     private let clients = MusicSource.allCases.map { MusicSourceClient(source: $0) }
+    private let artworkFetcher = BrowserArtworkFetcher()
+    /// Настройки буфера заодно хранят и разрешение ходить в сеть за обложкой.
+    private let settings: ClipboardSettings
+
+    init(settings: ClipboardSettings) {
+        self.settings = settings
+    }
 
     var isPolling: Bool { timer != nil }
 
@@ -120,8 +127,24 @@ final class MusicService: ObservableObject {
             var external: AudioSource?
             if best == nil || best?.isPlaying != true {
                 external = AudioSourceMonitor.currentSources().first
+
                 if let source = external, BrowserTabTitle.isBrowser(source.bundleID) {
-                    external?.detail = BrowserTabTitle.title(for: source.bundleID)
+                    // Сначала спрашиваем сам браузер: mediaSession знает
+                    // название трека и обложку даже когда воспроизведение
+                    // идёт внутри ленты и адрес страницы не меняется.
+                    if let media = BrowserMediaSession.read(bundleID: source.bundleID) {
+                        external?.detail = [media.title, media.artist]
+                            .compactMap { $0 }
+                            .joined(separator: " — ")
+                        external?.artworkURL = media.artworkURL
+                    }
+
+                    // Заголовок вкладки — запасной вариант, если чтение
+                    // скриптов в браузере не разрешено.
+                    if external?.detail == nil, let tab = BrowserTabTitle.currentTab(for: source.bundleID) {
+                        external?.detail = tab.title
+                        external?.pageURL = tab.url
+                    }
                 }
             }
 
@@ -163,10 +186,41 @@ final class MusicService: ObservableObject {
         nowPlaying = effective
         let best = effective
 
-        if best == nil {
+        if let best, trackChanged {
+            loadArtwork(for: best)
+        } else if best == nil {
+            loadExternalArtwork(for: external)
+        }
+    }
+
+    /// Обложка для чужого источника: у браузера её можно найти по адресу
+    /// открытой вкладки. Ходит в сеть, поэтому отключается в настройках.
+    private func loadExternalArtwork(for source: AudioSource?) {
+        guard let source, settings.fetchBrowserArtwork else {
             artwork = nil
-        } else if trackChanged {
-            loadArtwork(for: best!)
+            return
+        }
+
+        // Прямой адрес обложки от самого браузера — лучший случай:
+        // ни разбора страницы, ни угадывания.
+        if let artworkURL = source.artworkURL {
+            artworkFetcher.image(at: artworkURL) { [weak self] image in
+                guard let self, self.audioSource?.artworkURL == artworkURL else { return }
+                self.artwork = image
+            }
+            return
+        }
+
+        guard let pageURL = source.pageURL else {
+            artwork = nil
+            return
+        }
+
+        artworkFetcher.artwork(for: pageURL) { [weak self] image in
+            guard let self else { return }
+            // Пока грузили — источник мог смениться.
+            guard self.audioSource?.pageURL == pageURL else { return }
+            self.artwork = image
         }
     }
 
@@ -225,8 +279,9 @@ final class MusicService: ObservableObject {
 
     /// Просит разрешение на медиа-клавиши. Вызывается по нажатию кнопки,
     /// а не при запуске: выпрашивать доступ на пустом месте незачем.
+    /// Диалог показывается один раз за запуск.
     func requestMediaKeyPermissionIfNeeded() {
         guard needsMediaKeyPermission else { return }
-        MediaKeys.requestAuthorization()
+        MediaKeys.requestAuthorizationOnce()
     }
 }

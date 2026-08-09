@@ -19,15 +19,42 @@ enum MediaKeys {
     }
 
     /// Выдано ли разрешение на отправку событий ввода.
+    ///
+    /// Проверка без запроса: `AXIsProcessTrustedWithOptions` с включённым
+    /// запросом показывает диалог при каждом вызове, а спрашивать состояние
+    /// приходится часто.
     static var isAuthorized: Bool {
-        AXIsProcessTrusted()
+        AXIsProcessTrustedWithOptions(nil)
     }
 
     /// Показывает системный диалог с просьбой выдать разрешение.
-    /// Вызывать только по явному действию пользователя.
-    static func requestAuthorization() {
+    ///
+    /// Не чаще одного раза за запуск. Повторные диалоги на каждое нажатие
+    /// кнопки — самый быстрый способ довести пользователя до удаления
+    /// приложения, а разрешение от повторов всё равно не появится.
+    @discardableResult
+    static func requestAuthorizationOnce() -> Bool {
+        guard !isAuthorized else { return true }
+        guard !hasPrompted else { return false }
+        hasPrompted = true
+
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
+
+        Log.media.info("запрошен «Универсальный доступ» — диалог за этот запуск больше не показываем")
+        return false
+    }
+
+    /// Показывали ли диалог в этом запуске.
+    nonisolated(unsafe) private static var hasPrompted = false
+
+    /// Разрешение выдано, но система всё ещё считает приложение недоверенным.
+    ///
+    /// Так бывает после пересборки: ad-hoc подпись меняется, и запись
+    /// в списке разрешений остаётся от прошлой личности приложения.
+    /// Пользователю нужно убрать старую запись и добавить новую.
+    static var looksLikeStaleGrant: Bool {
+        hasPrompted && !isAuthorized
     }
 
     @discardableResult

@@ -97,6 +97,28 @@ enum MusicDemo {
 
             if let source = service.audioSource, BrowserTabTitle.isBrowser(source.bundleID) {
                 print("  вкладка: \(source.detail ?? "название не получено — нет разрешения на управление браузером")")
+                print("  адрес: \(source.pageURL?.absoluteString ?? "не получен")")
+
+                switch BrowserMediaSession.availability(for: source.bundleID) {
+                case .allowed:
+                    waitUntil({ service.artwork != nil }, timeout: 10)
+                    check("обложка загружена из метаданных браузера",
+                          service.artwork != nil,
+                          detail: service.artwork.map { "\(Int($0.size.width))×\(Int($0.size.height))" } ?? "нет")
+
+                case .blocked:
+                    print("  метаданные браузера запрещены — нужна разовая галочка:")
+                    print("    Safari → Настройки → Дополнения → «Показывать функции для веб-разработчиков»")
+                    print("    Разработка → «Разрешить JavaScript из Apple Events»")
+                    if let pageURL = source.pageURL {
+                        waitUntil({ service.artwork != nil }, timeout: 6)
+                        print("  обложка со страницы: \(service.artwork != nil ? "нашлась" : "не нашлась — воспроизведение идёт внутри ленты")")
+                        _ = pageURL
+                    }
+
+                case .unknown:
+                    print("  доступ к метаданным браузера пока не проверялся")
+                }
             }
         }
         print("")

@@ -17,7 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themeController = ThemeController()
         clipboardService = ClipboardService()
         metricsService = MetricsService()
-        musicService = MusicService()
+        // Настройки общие: разрешение ходить в сеть за обложкой лежит там же.
+        musicService = MusicService(settings: clipboardService.settings)
         notchController = NotchController(
             theme: themeController,
             clipboard: clipboardService,

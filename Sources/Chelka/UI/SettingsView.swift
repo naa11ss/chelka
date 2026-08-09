@@ -99,6 +99,10 @@ private struct ClipboardSettingsView: View {
             Section(T("settings.capture", "Что сохранять")) {
                 Toggle(T("settings.captureScreenshots", "Снимки экрана из папки снимков"), isOn: screenshotsBinding)
                 Toggle(T("settings.skipConcealed", "Пропускать содержимое менеджеров паролей"), isOn: concealedBinding)
+                Toggle(T("settings.browserArtwork", "Подтягивать обложку из браузера"), isOn: artworkBinding)
+                Text(T("settings.browserArtwork.hint", "Единственное место, где приложение обращается к сети: по адресу открытой вкладки запрашивается картинка ролика или трека."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(T("settings.capture.hint", "По умолчанию сохраняется всё, что копируется, включая пароли. История шифруется на диске, но менеджеры паролей помечают своё содержимое — этот переключатель заставляет виджет такие записи игнорировать."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -152,6 +156,13 @@ private struct ClipboardSettingsView: View {
         Binding(
             get: { clipboard.settings.captureScreenshots },
             set: { clipboard.settings.captureScreenshots = $0 }
+        )
+    }
+
+    private var artworkBinding: Binding<Bool> {
+        Binding(
+            get: { clipboard.settings.fetchBrowserArtwork },
+            set: { clipboard.settings.fetchBrowserArtwork = $0 }
         )
     }
 

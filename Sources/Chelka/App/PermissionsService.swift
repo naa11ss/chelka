@@ -41,7 +41,7 @@ final class PermissionsService: ObservableObject {
     }
 
     func refresh() {
-        items = [accessibility, automation, screenshots, storage]
+        items = [accessibility, automation, browserMetadata, screenshots, storage]
     }
 
     // MARK: - Отдельные разрешения
@@ -51,7 +51,12 @@ final class PermissionsService: ObservableObject {
             id: "accessibility",
             title: T("permission.accessibility", "Универсальный доступ"),
             explanation: T("permission.accessibility.why", "Нужен только для медиа-клавиш: ими управляются браузер и плееры, кроме Music и Spotify."),
-            cost: T("permission.accessibility.cost", "Без него кнопки работают только с Music и Spotify."),
+            cost: MediaKeys.looksLikeStaleGrant
+                ? T(
+                    "permission.accessibility.stale",
+                    "Разрешение выдано, но система его не признаёт: запись осталась от прошлой сборки. Убери Chelka.app из списка кнопкой «−» и разреши заново."
+                  )
+                : T("permission.accessibility.cost", "Без него кнопки работают только с Music и Spotify."),
             state: MediaKeys.isAuthorized ? .granted : .denied,
             settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         )
@@ -72,6 +77,33 @@ final class PermissionsService: ObservableObject {
             cost: T("permission.automation.cost", "Без него останутся только кнопки без названия трека."),
             state: state,
             settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+        )
+    }
+
+    /// Чтение `navigator.mediaSession` в браузере: даёт название трека
+    /// и обложку там, где адрес страницы ничего не говорит — например,
+    /// при воспроизведении внутри ленты.
+    private var browserMetadata: Item {
+        let state: State
+        switch BrowserMediaSession.availability(for: "com.apple.Safari") {
+        case .allowed: state = .granted
+        case .blocked: state = .denied
+        case .unknown: state = .unknown
+        }
+
+        return Item(
+            id: "browser-metadata",
+            title: T("permission.browserJS", "Метаданные из браузера"),
+            explanation: T(
+                "permission.browserJS.why",
+                "Название трека и обложку браузер отдаёт только скриптом. Включается один раз: Safari → Настройки → Дополнения → «Показывать функции для веб-разработчиков», затем Разработка → «Разрешить JavaScript из Apple Events»."
+            ),
+            cost: T(
+                "permission.browserJS.cost",
+                "Без этого вместо трека показывается заголовок вкладки, а обложка находится только у страниц, где ролик и есть страница."
+            ),
+            state: state,
+            settingsURL: nil
         )
     }
 
@@ -109,7 +141,13 @@ final class PermissionsService: ObservableObject {
     // MARK: - Действия
 
     func requestAccessibility() {
-        MediaKeys.requestAuthorization()
+        MediaKeys.requestAuthorizationOnce()
+    }
+
+    /// Разрешение выдано, но не действует — обычно из-за того, что подпись
+    /// приложения сменилась и в списке осталась запись от прошлой сборки.
+    var hasStaleAccessibilityGrant: Bool {
+        MediaKeys.looksLikeStaleGrant
     }
 
     func open(_ url: URL) {

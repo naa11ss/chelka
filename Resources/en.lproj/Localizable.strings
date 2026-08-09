@@ -61,6 +61,8 @@
 "settings.capture" = "What to capture";
 "settings.captureScreenshots" = "Screenshots from the screenshot folder";
 "settings.skipConcealed" = "Skip password manager content";
+"settings.browserArtwork" = "Fetch artwork from the browser";
+"settings.browserArtwork.hint" = "The only place the app touches the network: it requests the video or track image using the open tab address.";
 "settings.capture.hint" = "Everything you copy is saved by default, passwords included. History is encrypted on disk, but password managers mark their content — this switch makes the widget ignore such entries.";
 "settings.blacklist" = "Blocklisted apps";
 "settings.blacklist.empty" = "Empty. Add an app so anything copied while it is active is not saved.";
@@ -80,9 +82,13 @@
 "permission.accessibility" = "Accessibility";
 "permission.accessibility.why" = "Needed only for media keys: they control the browser and players other than Music and Spotify.";
 "permission.accessibility.cost" = "Without it the buttons only work with Music and Spotify.";
+"permission.accessibility.stale" = "Permission was granted but the system does not recognise it: the entry is left over from a previous build. Remove Chelka.app from the list with \"−\" and allow it again.";
 "permission.automation" = "Control Music and Spotify";
 "permission.automation.why" = "This is how the widget gets the track name, artwork and playback position.";
 "permission.automation.cost" = "Without it only buttons remain, with no track name.";
+"permission.browserJS" = "Browser metadata";
+"permission.browserJS.why" = "The browser only gives the track name and artwork through a script. Enable once: Safari → Settings → Advanced → \"Show features for web developers\", then Develop → \"Allow JavaScript from Apple Events\".";
+"permission.browserJS.cost" = "Without it the tab title is shown instead of the track, and artwork is only found for pages where the page is the track.";
 "permission.screenshots" = "Access to the screenshot folder";
 "permission.screenshots.why" = "Screenshots go to a file, not the clipboard. The widget watches the %@ folder.";
 "permission.screenshots.cost" = "Without it ⇧⌘4 screenshots will not reach the history.";

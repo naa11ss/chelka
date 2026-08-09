@@ -11,7 +11,10 @@ build: ## Собрать в debug
 test: ## Прогнать тесты ядра
 	swift test
 
-app: ## Собрать Chelka.app (release + ad-hoc подпись)
+identity: ## Создать постоянный сертификат подписи (один раз)
+	@bash scripts/make-identity.sh
+
+app: ## Собрать Chelka.app (release + подпись)
 	@bash scripts/build-app.sh
 
 run: stop app ## Пересобрать и запустить
