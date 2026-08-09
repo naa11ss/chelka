@@ -8,6 +8,7 @@ import ChelkaCore
 /// отдана целая строка, а не треть.
 struct ExpandedContentView: View {
     @ObservedObject var clipboard: ClipboardService
+    @ObservedObject var metrics: MetricsService
 
     var body: some View {
         VStack(spacing: DS.cardSpacing) {
@@ -15,7 +16,7 @@ struct ExpandedContentView: View {
                 MusicPlaceholder()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                MetricsPlaceholder()
+                MetricsCard(service: metrics)
                     .frame(width: 168)
             }
             .frame(height: 78)
@@ -110,32 +111,3 @@ private struct MusicPlaceholder: View {
     }
 }
 
-private struct MetricsPlaceholder: View {
-    var body: some View {
-        Card(title: "Система", systemImage: "gauge.medium", stage: "этап 3") {
-            HStack(spacing: 10) {
-                MetricColumn(label: "CPU", value: "—")
-                MetricColumn(label: "RAM", value: "—")
-                MetricColumn(label: "°C", value: "—")
-            }
-            .frame(maxWidth: .infinity)
-        }
-    }
-}
-
-private struct MetricColumn: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(spacing: 3) {
-            Text(value)
-                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                .foregroundStyle(Color.notchPrimary)
-            Text(label)
-                .font(.system(size: 9))
-                .foregroundStyle(Color.notchSecondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}

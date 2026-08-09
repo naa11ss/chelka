@@ -4,6 +4,7 @@ import ChelkaCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var themeController: ThemeController!
     private var clipboardService: ClipboardService!
+    private var metricsService: MetricsService!
     private var notchController: NotchController!
     private var statusItemController: StatusItemController!
 
@@ -12,7 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         themeController = ThemeController()
         clipboardService = ClipboardService()
-        notchController = NotchController(theme: themeController, clipboard: clipboardService)
+        metricsService = MetricsService()
+        notchController = NotchController(
+            theme: themeController,
+            clipboard: clipboardService,
+            metrics: metricsService
+        )
         statusItemController = StatusItemController(
             theme: themeController,
             onToggleNotch: { [weak self] in self?.notchController.toggleFromMenu() }
@@ -24,6 +30,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ⌥⌘V открывает виджет на истории буфера.
         HotkeyCenter.shared.register(HotkeyCenter.defaultBinding) { [weak self] in
             self?.notchController.openPinned()
+        }
+
+        if CommandLine.arguments.contains("--metrics-demo") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [metricsService] in
+                MetricsDemo.run(service: metricsService!)
+            }
         }
 
         if CommandLine.arguments.contains("--clipboard-demo") {

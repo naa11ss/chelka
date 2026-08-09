@@ -34,7 +34,19 @@ enum Diagnostics {
             print("    панель:       \(short(layout.panelFrame))")
         }
 
+        printSensors()
         exit(0)
+    }
+
+    private static func printSensors() {
+        print("")
+        let reader = TemperatureReader()
+        let sensors = reader.readAll().sorted { $0.name < $1.name }
+
+        print("Термодатчики: \(sensors.count)")
+        for sensor in sensors {
+            print(String(format: "    %-34@ %6.2f °C", sensor.name as NSString, sensor.celsius))
+        }
     }
 
     private static func short(_ rect: CGRect) -> String {

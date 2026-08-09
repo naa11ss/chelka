@@ -9,6 +9,11 @@ let package = Package(
         .library(name: "ChelkaCore", targets: ["ChelkaCore"]),
     ],
     targets: [
+        // Объявления приватного API IOKit для чтения термодатчиков.
+        .target(
+            name: "CIOKitShim",
+            linkerSettings: [.linkedFramework("IOKit")]
+        ),
         // Ядро: никакого AppKit, полная строгая конкурентность Swift 6,
         // всё тестируется без экрана и без запуска приложения.
         .target(
@@ -20,7 +25,7 @@ let package = Package(
         // ломается о неаннотированные места системных фреймворков.
         .executableTarget(
             name: "Chelka",
-            dependencies: ["ChelkaCore"],
+            dependencies: ["ChelkaCore", "CIOKitShim"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

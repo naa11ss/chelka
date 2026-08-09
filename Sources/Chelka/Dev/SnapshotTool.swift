@@ -57,6 +57,11 @@ enum SnapshotTool {
     }
 
     static func run(outputDirectory: String) -> Never {
+        // Метрики снимаем настоящие: прочерки на снимках в документации
+        // выглядят как неработающая функция.
+        demoMetrics.startSampling(interval: 0.3)
+        RunLoop.main.run(until: Date().addingTimeInterval(1.2))
+
         let directory = URL(fileURLWithPath: (outputDirectory as NSString).expandingTildeInPath)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
@@ -78,6 +83,7 @@ enum SnapshotTool {
     /// Один общий сервис на все снимки: пересоздавать демо-данные
     /// для каждого кадра незачем.
     private static let demoClipboard = ClipboardService.makeDemo()
+    private static let demoMetrics = MetricsService()
 
     private static func render(_ testCase: Case, to url: URL) -> Bool {
         let layout = NotchGeometry.layout(for: testCase.metrics)
@@ -86,7 +92,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model, clipboard: demoClipboard)
+            NotchRootView(model: model, clipboard: demoClipboard, metrics: demoMetrics)
         }
 
         let hosting = NSHostingView(rootView: root)

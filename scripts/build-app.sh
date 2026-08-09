@@ -37,8 +37,20 @@ for RESOURCE_BUNDLE in "$ROOT/.build/$CONFIG"/*.bundle; do
 done
 shopt -u nullglob
 
-echo "==> подпись (ad-hoc)"
-codesign --force --sign - --timestamp=none "$BUNDLE" >/dev/null
+# Личность подписи.
+#
+# Ad-hoc (`-`) меняется при каждой пересборке, а связка ключей и TCC
+# привязывают выданные разрешения именно к личности приложения. Поэтому
+# на ad-hoc сборке macOS переспрашивает доступ после каждой сборки.
+# Постоянный сертификат снимает это: SIGN_IDENTITY="Chelka Dev" make app
+IDENTITY="${SIGN_IDENTITY:--}"
+
+if [[ "$IDENTITY" == "-" ]]; then
+	echo "==> подпись (ad-hoc — разрешения будут переспрашиваться после каждой сборки)"
+else
+	echo "==> подпись ($IDENTITY)"
+fi
+codesign --force --sign "$IDENTITY" --timestamp=none "$BUNDLE" >/dev/null
 
 echo "==> проверка подписи"
 codesign --verify --deep --strict "$BUNDLE"

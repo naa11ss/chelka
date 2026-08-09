@@ -9,6 +9,7 @@ import ChelkaCore
 struct NotchRootView: View {
     @ObservedObject var model: NotchViewModel
     @ObservedObject var clipboard: ClipboardService
+    @ObservedObject var metrics: MetricsService
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -59,7 +60,7 @@ struct NotchRootView: View {
             }
             .overlay {
                 if model.state == .expanded {
-                    ExpandedContentView(clipboard: clipboard)
+                    ExpandedContentView(clipboard: clipboard, metrics: metrics)
                         .padding(.horizontal, DS.flare + DS.contentPadding)
                         // Верхнюю полосу занимает сам вырез (или меню-бар):
                         // содержимое под ней физически не видно.

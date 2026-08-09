@@ -42,10 +42,12 @@ final class NotchController {
     var cursorProvider: () -> NSPoint = { NSEvent.mouseLocation }
 
     private let clipboard: ClipboardService
+    private let metrics: MetricsService
 
-    init(theme: ThemeController, clipboard: ClipboardService) {
+    init(theme: ThemeController, clipboard: ClipboardService, metrics: MetricsService) {
         self.theme = theme
         self.clipboard = clipboard
+        self.metrics = metrics
         let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
         self.layout = NotchGeometry.layout(for: metrics)
         self.viewModel = NotchViewModel(layout: layout)
@@ -79,6 +81,7 @@ final class NotchController {
     }
 
     func stop() {
+        metrics.stopSampling()
         unregisterQuickPickHotkeys()
         pinnedAutoCloseTimer?.invalidate()
         hoverMonitor.stop()
@@ -179,7 +182,7 @@ final class NotchController {
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
 
-        let root = NotchRootView(model: viewModel, clipboard: clipboard)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard, metrics: metrics)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -283,6 +286,14 @@ final class NotchController {
     private func applyState(animated: Bool) {
         updateInteractiveRect()
         Log.notch.info("состояние: \(String(describing: self.stateMachine.state), privacy: .public)")
+
+        // Метрики опрашиваются только пока виджет виден: в свёрнутом
+        // состоянии на них никто не смотрит, а батарею они едят.
+        if stateMachine.state == .expanded {
+            metrics.startSampling()
+        } else {
+            metrics.stopSampling()
+        }
 
         if animated {
             withAnimation(NotchAnimation.morph) {

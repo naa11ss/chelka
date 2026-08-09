@@ -33,7 +33,10 @@ hover-demo: build stop ## Прогнать сценарий наведения �
 clipboard-demo: build stop ## Сквозная проверка буфера на живой системе
 	@.build/debug/Chelka --clipboard-demo
 
-verify: test hover-demo clipboard-demo snapshots ## Все проверки разом
+metrics-demo: build stop ## Проверка метрик на живой машине
+	@.build/debug/Chelka --metrics-demo
+
+verify: test hover-demo clipboard-demo metrics-demo snapshots ## Все проверки разом
 	@echo "все проверки пройдены"
 
 check: test ## Полная проверка перед коммитом
