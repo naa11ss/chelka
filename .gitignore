@@ -1,0 +1,24 @@
+## Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+## Сборка приложения
+build/
+
+## Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+## macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+## Редакторы
+.vscode/
+.idea/
+*.swp

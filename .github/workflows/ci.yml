@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Сборка и тесты
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Версия Swift
+        run: swift --version
+
+      - name: Тесты ядра
+        run: swift test
+
+      - name: Сборка Chelka.app
+        run: make app
+
+      - name: Проверка бандла
+        run: |
+          test -x build/Chelka.app/Contents/MacOS/Chelka
+          test -f build/Chelka.app/Contents/Info.plist
+          codesign --verify --deep --strict build/Chelka.app
+
+      - name: Артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chelka.app
+          path: build/Chelka.app
