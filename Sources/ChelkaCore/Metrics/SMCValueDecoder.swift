@@ -40,4 +40,19 @@ public enum SMCValueDecoder {
     public static func decodeUInt8(_ bytes: [UInt8]) -> Int? {
         bytes.first.map(Int.init)
     }
+
+    // MARK: - Кодирование (для записи целевых оборотов вентилятора)
+
+    /// Обратная операция к `decodeFPE2` — целевые обороты в байты для записи.
+    /// Отрицательные и слишком большие значения обрезаются: писать в
+    /// контроллер вентилятора мусор нельзя, даже если вызывающий код ошибся.
+    public static func encodeFPE2(_ rpm: Double) -> [UInt8] {
+        let clamped = max(0, min(rpm, 16383))
+        let raw = UInt16((clamped * 4).rounded())
+        return [UInt8(raw >> 8), UInt8(raw & 0xFF)]
+    }
+
+    public static func encodeUInt8(_ value: Int) -> [UInt8] {
+        [UInt8(clamping: value)]
+    }
 }

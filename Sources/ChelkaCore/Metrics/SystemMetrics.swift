@@ -132,17 +132,30 @@ public enum SystemTemperature {
     }
 }
 
-/// Обороты одного вентилятора.
+/// Обороты одного вентилятора, его паспортный диапазон и то, чем сейчас
+/// управляется скорость — автоматикой прошивки или ручным процентом.
 public struct FanSpeed: Sendable, Equatable, Identifiable {
     public let index: Int
     public let rpm: Double
+    public let minRPM: Double
+    public let maxRPM: Double
+    public let override: FanOverride
 
-    public init(index: Int, rpm: Double) {
+    public init(index: Int, rpm: Double, minRPM: Double, maxRPM: Double, override: FanOverride = .auto) {
         self.index = index
         self.rpm = rpm
+        self.minRPM = minRPM
+        self.maxRPM = maxRPM
+        self.override = override
     }
 
     public var id: Int { index }
+
+    /// Текущие обороты, выраженные в проценте от паспортного диапазона —
+    /// то же число, что показывает регулятор в интерфейсе.
+    public var currentPercent: Int {
+        FanPercent.percent(forRPM: rpm, minRPM: minRPM, maxRPM: maxRPM)
+    }
 }
 
 /// Все метрики разом — то, что показывает виджет.

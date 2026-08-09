@@ -83,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Ручной режим вентилятора не должен пережить процесс, который
+        // его выставил — иначе обороты застынут там, где их оставили,
+        // даже когда машина остынет.
+        metricsService?.revertAllFanOverrides()
         clipboardService?.stop()
         musicService?.stop()
         notchController?.stop()

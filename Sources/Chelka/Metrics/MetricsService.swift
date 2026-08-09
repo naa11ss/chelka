@@ -25,6 +25,14 @@ final class MetricsService: ObservableObject {
 
     private var lastTemperature: Double?
 
+    /// Паспортные пределы вентиляторов не меняются во время работы —
+    /// читаем один раз, а не каждый тик.
+    private var fanLimits: [Int: (min: Double, max: Double)] = [:]
+    /// Что сейчас реально запрошено у каждого вентилятора: автоматика
+    /// или ручной процент. Живёт до explicit смены пользователем или
+    /// до выхода из приложения — сворачивание виджета его не сбрасывает.
+    private var fanOverrides: [Int: FanOverride] = [:]
+
     var isSampling: Bool { timer != nil }
 
     func startSampling(interval: TimeInterval = 1.5) {
@@ -67,14 +75,16 @@ final class MetricsService: ObservableObject {
             previousTicks = ticks
         }
 
-        var fans: [FanSpeed] = []
         if tickCounter % Self.temperatureEveryNTicks == 0 {
             lastTemperature = SystemTemperature.representative(from: readTemperatures())
-            fans = readFans()
-        } else {
-            fans = snapshot.fans
         }
         tickCounter += 1
+
+        // Обороты читаются каждый тик, не через раз, как температура:
+        // это ровно то число, за которым следит регулятор, пока пользователь
+        // его крутит, и задержка отклика там, где ждут живой обратной связи,
+        // была бы заметна.
+        let fans = readFans()
 
         snapshot = SystemMetricsSnapshot(
             cpuPercent: cpuPercent ?? snapshot.cpuPercent,
@@ -155,9 +165,69 @@ final class MetricsService: ObservableObject {
     }
 
     /// Пусто на моделях без вентилятора (Air и часть Mac mini) —
-    /// карточка в интерфейсе просто не рисует блок оборотов.
+    /// карточка в интерфейсе просто не рисует блок оборотов и регулятор.
     private func readFans() -> [FanSpeed] {
-        smcReader.readFans().map { FanSpeed(index: $0.index, rpm: $0.rpm) }
+        smcReader.readFans().map { reading in
+            // Паспортный диапазон фиксирован железом — кэшируем при первом
+            // успешном чтении вместо того, чтобы спрашивать SMC заново
+            // на каждом тике ради чисел, которые не могут измениться.
+            if fanLimits[reading.index] == nil {
+                fanLimits[reading.index] = (reading.minRPM, reading.maxRPM)
+            }
+            let limits = fanLimits[reading.index] ?? (reading.minRPM, reading.maxRPM)
+
+            return FanSpeed(
+                index: reading.index,
+                rpm: reading.rpm,
+                minRPM: limits.min,
+                maxRPM: limits.max,
+                override: fanOverrides[reading.index] ?? .auto
+            )
+        }
+    }
+
+    // MARK: - Управление вентилятором
+
+    /// Регулятор: `percent == nil` возвращает вентилятор автоматике
+    /// прошивки, иначе задаёт долю от паспортного диапазона оборотов.
+    ///
+    /// Обороты никогда не просят больше собственного максимума
+    /// вентилятора — `FanPercent.rpm` считает от `F{i}Mn…F{i}Mx`,
+    /// которые сообщает сам вентилятор, программно перепрыгнуть через
+    /// них нельзя даже в принципе: контроллер вентилятора сам обрежет
+    /// по своему пределу, что бы мы ни отправили.
+    @discardableResult
+    func setFanOverride(index: Int, percent: Int?) -> Bool {
+        guard let limits = fanLimits[index] else {
+            Log.metrics.error("нет паспортного диапазона для вентилятора \(index) — регулятор ещё не читал его")
+            return false
+        }
+
+        if let percent {
+            let snapped = FanPercent.snap(percent)
+            let targetRPM = FanPercent.rpm(forPercent: snapped, minRPM: limits.min, maxRPM: limits.max)
+            let success = smcReader.setFanOverride(index: index, targetRPM: targetRPM)
+
+            fanOverrides[index] = success ? .percent(snapped) : .auto
+            Log.metrics.info("вентилятор \(index): запрошено \(snapped)% (\(Int(targetRPM)) об/мин), \(success ? "принято" : "отклонено")")
+            return success
+        } else {
+            let success = smcReader.setFanOverride(index: index, targetRPM: nil)
+            fanOverrides[index] = .auto
+            Log.metrics.info("вентилятор \(index): возврат к автоматике, \(success ? "принято" : "отклонено")")
+            return success
+        }
+    }
+
+    /// Отдаёт все вентиляторы обратно прошивке. Вызывается при выходе
+    /// из приложения — ручной режим не должен пережить сам процесс,
+    /// который его выставил: иначе обороты застынут там, где их
+    /// оставили, даже когда машина остынет.
+    func revertAllFanOverrides() {
+        for index in fanOverrides.keys where fanOverrides[index] != .auto {
+            smcReader.setFanOverride(index: index, targetRPM: nil)
+        }
+        fanOverrides.removeAll()
     }
 
     /// Публичный запасной показатель: работает всегда, но без градусов.

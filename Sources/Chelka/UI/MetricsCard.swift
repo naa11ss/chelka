@@ -35,27 +35,19 @@ struct MetricsCard: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Пусто на моделях без вентилятора — строка просто не рисуется,
-                // карточка не оставляет под неё дыру.
+                // Пусто на моделях без вентилятора — блок просто не рисуется,
+                // карточка не оставляет под него дыру.
                 if !service.snapshot.fans.isEmpty {
-                    fanRow
+                    VStack(spacing: 3) {
+                        ForEach(service.snapshot.fans) { fan in
+                            FanControlRow(fan: fan) { percent in
+                                service.setFanOverride(index: fan.index, percent: percent)
+                            }
+                        }
+                    }
+                    .padding(.top, 2)
                 }
             }
-        }
-    }
-
-    private var fanRow: some View {
-        HStack(spacing: 8) {
-            ForEach(service.snapshot.fans) { fan in
-                HStack(spacing: 3) {
-                    Image(systemName: "fan")
-                        .font(.system(size: 8))
-                    Text("\(Int(fan.rpm.rounded()))")
-                        .font(.system(size: 9, weight: .medium).monospacedDigit())
-                }
-                .foregroundStyle(Color.notchSecondary)
-            }
-            Spacer(minLength: 0)
         }
     }
 

@@ -62,8 +62,26 @@ enum Diagnostics {
         print("")
         print("Вентиляторы: \(fans.isEmpty ? "нет (безвентиляторная модель либо ключи не опознаны)" : "\(fans.count)")")
         for fan in fans {
-            print(String(format: "    вентилятор %d: %.0f об/мин", fan.index, fan.rpm))
+            print(String(format: "    вентилятор %d: %.0f об/мин (диапазон %.0f…%.0f)", fan.index, fan.rpm, fan.minRPM, fan.maxRPM))
         }
+
+        guard let first = fans.first else { return }
+
+        print("")
+        print("Пробная запись на вентиляторе \(first.index): 50% от диапазона…")
+        let targetRPM = (first.minRPM + first.maxRPM) / 2
+        let writeOK = smc.setFanOverride(index: first.index, targetRPM: targetRPM)
+        print("    запись: \(writeOK ? "принята" : "отклонена")")
+
+        Thread.sleep(forTimeInterval: 1.5)
+        let after = smc.currentRPM(index: first.index)
+        print("    обороты через 1.5 с: \(after.map { String(format: "%.0f", $0) } ?? "не читается")")
+        print("    ожидалось около: \(String(format: "%.0f", targetRPM))")
+
+        print("")
+        print("Возврат к автоматике…")
+        let revertOK = smc.setFanOverride(index: first.index, targetRPM: nil)
+        print("    запись: \(revertOK ? "принята" : "отклонена")")
     }
 
     private static func short(_ rect: CGRect) -> String {

@@ -20,7 +20,10 @@ struct ExpandedContentView: View {
                 MetricsCard(service: metrics)
                     .frame(width: 168)
             }
-            .frame(height: 78)
+            // Минимум, не фиксированная высота: карточка метрик растёт,
+            // когда на Intel-маке есть вентиляторы и под регулятор нужно
+            // больше места, чем занимают три обычных индикатора.
+            .frame(minHeight: 78)
 
             ClipboardPane(service: clipboard)
                 .padding(10)

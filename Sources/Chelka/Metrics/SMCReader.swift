@@ -75,21 +75,68 @@ final class SMCReader {
     struct FanReading: Equatable {
         let index: Int
         let rpm: Double
+        let minRPM: Double
+        let maxRPM: Double
     }
 
-    /// Обороты по каждому вентилятору. Пустой список — либо машина
-    /// без вентилятора (Air, часть Mac mini), либо ключи для этой
-    /// конкретной модели не входят в известный набор.
+    /// Сколько вентиляторов видит SMC. 0 у Air и безвентиляторных Mac mini.
+    func fanCount() -> Int {
+        guard isAvailable else { return 0 }
+        guard let count = readIntValue(Self.fanCountKey), count > 0, count <= 8 else { return 0 }
+        return count
+    }
+
+    /// Обороты и паспортный диапазон по каждому вентилятору. Пустой список —
+    /// либо машина без вентилятора, либо ключи для этой модели не входят
+    /// в известный набор.
     func readFans() -> [FanReading] {
-        guard isAvailable else { return [] }
-        guard let count = readIntValue(Self.fanCountKey), count > 0, count <= 8 else { return [] }
+        let count = fanCount()
+        guard count > 0 else { return [] }
 
         var fans: [FanReading] = []
         for index in 0..<count {
-            guard let rpm = readFloatValue(Self.fanSpeedKey(index)) else { continue }
-            fans.append(FanReading(index: index, rpm: rpm))
+            guard let rpm = readFloatValue(Self.fanSpeedKey(index)),
+                  let minRPM = readFloatValue("F\(index)Mn"),
+                  let maxRPM = readFloatValue("F\(index)Mx")
+            else { continue }
+            fans.append(FanReading(index: index, rpm: rpm, minRPM: minRPM, maxRPM: maxRPM))
         }
         return fans
+    }
+
+    // MARK: - Управление (запись)
+
+    /// Переводит вентилятор в ручной режим и задаёт целевые обороты —
+    /// либо возвращает автоматике прошивки.
+    ///
+    /// Два ключа на модель менялось за пятнадцать лет несколько раз;
+    /// `F{i}Md` — самый распространённый, но не единственный. На модели,
+    /// где он не сработает, запись просто ничего не изменит (тот же принцип
+    /// безопасного отказа, что и у чтения) — `verifyOverrideTookEffect`
+    /// существует именно чтобы это было видно, а не тихо.
+    ///
+    /// Целевые обороты никогда не выходят за диапазон `F{i}Mn…F{i}Mx`,
+    /// который объявляет сам вентилятор: контроллер не даст превысить
+    /// паспортный максимум, что бы сюда ни отправили, но заявку всё равно
+    /// обрезаем на нашей стороне — не полагаемся только на защиту дальше.
+    @discardableResult
+    func setFanOverride(index: Int, targetRPM: Double?) -> Bool {
+        guard isAvailable else { return false }
+
+        guard let targetRPM else {
+            return writeUInt8("F\(index)Md", value: 0)
+        }
+
+        let modeWritten = writeUInt8("F\(index)Md", value: 1)
+        let targetWritten = writeFloatFPE2("F\(index)Tg", value: targetRPM)
+        return modeWritten && targetWritten
+    }
+
+    /// Считывает текущие обороты заново — вызывать через секунду-две после
+    /// `setFanOverride`, чтобы показать пользователю, подействовало ли,
+    /// а не понадеяться, что запись сама по себе значит успех.
+    func currentRPM(index: Int) -> Double? {
+        readFloatValue(Self.fanSpeedKey(index))
     }
 
     // MARK: - Чтение одного ключа
@@ -116,6 +163,14 @@ final class SMCReader {
         case "ui16": return SMCValueDecoder.decodeUInt16(raw.bytes)
         default: return nil
         }
+    }
+
+    private func writeFloatFPE2(_ key: String, value: Double) -> Bool {
+        writeBytes(key, bytes: SMCValueDecoder.encodeFPE2(value))
+    }
+
+    private func writeUInt8(_ key: String, value: Int) -> Bool {
+        writeBytes(key, bytes: SMCValueDecoder.encodeUInt8(value))
     }
 
     private struct RawValue {
@@ -148,6 +203,38 @@ final class SMCReader {
         let type = Self.string(fromFourCC: infoResponse.keyInfo.dataType)
         let bytes = readResponse.bytes.asArray(count: Int(dataSize))
         return RawValue(type: type, bytes: bytes)
+    }
+
+    /// Тот же двухфазный протокол, что у чтения: сначала `kSMCReadKeyInfo`
+    /// узнаёт заявленный драйвером размер поля, потом `kSMCWriteBytes`
+    /// отправляет значение — размер обязан совпасть, иначе SMC отклонит
+    /// запись тем же кодом ошибки, каким отвечает на неизвестный ключ.
+    private func writeBytes(_ key: String, bytes: [UInt8]) -> Bool {
+        guard connection != 0 else { return false }
+
+        var infoRequest = SMCParamStruct()
+        infoRequest.key = Self.fourCC(key)
+        infoRequest.data8 = SMCSelector.readKeyInfo
+
+        guard let infoResponse = call(infoRequest), infoResponse.result == 0 else { return false }
+
+        let dataSize = Int(infoResponse.keyInfo.dataSize)
+        guard dataSize > 0, dataSize <= 32, dataSize == bytes.count else {
+            Log.metrics.debug("SMC запись \(key, privacy: .public): размер не совпал (ждёт \(dataSize), дано \(bytes.count))")
+            return false
+        }
+
+        var writeRequest = SMCParamStruct()
+        writeRequest.key = Self.fourCC(key)
+        writeRequest.keyInfo.dataSize = infoResponse.keyInfo.dataSize
+        writeRequest.data8 = SMCSelector.writeBytes
+        writeRequest.bytes = SMCBytes32(bytes)
+
+        guard let writeResponse = call(writeRequest), writeResponse.result == 0 else {
+            Log.metrics.debug("SMC запись \(key, privacy: .public): отклонено драйвером")
+            return false
+        }
+        return true
     }
 
     private func call(_ input: SMCParamStruct) -> SMCParamStruct? {
@@ -195,6 +282,7 @@ final class SMCReader {
 /// Значения — часть протокола драйвера, не публичный API Apple.
 private enum SMCSelector {
     static let handleYPCEvent: UInt32 = 2
+    static let writeBytes: UInt8 = 6
     static let readBytes: UInt8 = 5
     static let readKeyInfo: UInt8 = 9
 }
@@ -231,6 +319,26 @@ private struct SMCBytes32 {
         UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
         UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8
     ) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+    init() {}
+
+    /// Байты сверх 32 отбрасываются, недостающие остаются нулями —
+    /// запись всегда шлёт ровно 32-байтовое поле независимо от того,
+    /// сколько байт реально значимо для конкретного ключа.
+    init(_ bytes: [UInt8]) {
+        for (index, byte) in bytes.prefix(32).enumerated() {
+            self[index] = byte
+        }
+    }
+
+    private subscript(index: Int) -> UInt8 {
+        get {
+            withUnsafeBytes(of: b) { $0[index] }
+        }
+        set {
+            withUnsafeMutableBytes(of: &b) { $0[index] = newValue }
+        }
+    }
 
     func asArray(count: Int) -> [UInt8] {
         let all = [
