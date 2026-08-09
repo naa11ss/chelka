@@ -29,28 +29,39 @@ final class SwipeCatcherView: NSView {
     private var gesture = TrackSwipeGesture()
 
     override func scrollWheel(with event: NSEvent) {
+        Log.media.debug(
+            "своп: событие получено, phase=\(event.phase.rawValue, privacy: .public) momentum=\(event.momentumPhase.rawValue, privacy: .public) dx=\(event.scrollingDeltaX, format: .fixed(precision: 1)) dy=\(event.scrollingDeltaY, format: .fixed(precision: 1))"
+        )
+
         // event.phase пуст у чисто инерционных событий после отрыва пальцев —
         // их отбрасываем целиком, иначе инерция долистывала бы ещё на трек-два
         // сверх того, что реально сделали пальцы.
-        guard event.phase != [] else { return }
+        guard event.phase != [] else {
+            Log.media.debug("своп: пропущено — пустая фаза (инерция)")
+            return
+        }
 
         switch event.phase {
         case .began:
             gesture.began()
+            Log.media.debug("своп: began")
 
         case .changed:
             // Жест обязан быть явно горизонтальным — иначе обычная
             // вертикальная прокрутка над карточкой перелистывала бы трек.
             guard abs(event.scrollingDeltaX) >= abs(event.scrollingDeltaY) else {
+                Log.media.debug("своп: не горизонтально, пропускаю дальше")
                 super.scrollWheel(with: event)
                 return
             }
             if let direction = gesture.changed(deltaX: event.scrollingDeltaX) {
+                Log.media.info("своп: сработало направление \(String(describing: direction), privacy: .public)")
                 onSwipe?(direction)
             }
 
         case .ended, .cancelled:
             gesture.ended()
+            Log.media.debug("своп: ended")
 
         default:
             super.scrollWheel(with: event)

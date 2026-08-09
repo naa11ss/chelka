@@ -36,6 +36,11 @@ struct MusicCard: View {
             // до них раньше, чем до этого перехватчика скролла.
             .background(TrackSwipeCatcher(onSwipe: handleSwipe))
             .overlay { swipeFlashView }
+            // contentShape растягивает зону клика на весь прямоугольник,
+            // включая пустые места вроде Spacer — без него двойной клик
+            // мимо текста и обложки просто бы не долетал до жеста.
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { service.playPause() }
         }
         .onReceive(ticker) { _ in clock = MonotonicClock.now }
     }

@@ -1,4 +1,4 @@
-.PHONY: help build test app run stop clean check snapshots diagnose
+.PHONY: help build test app pkg run stop clean check snapshots diagnose
 
 APP := build/Chelka.app
 
@@ -17,12 +17,25 @@ identity: ## Создать постоянный сертификат подпи
 app: ## Собрать Chelka.app (release, arm64 + x86_64, с подписью)
 	@bash scripts/build-app.sh
 
-dist: app ## Собрать архив для переноса на другой Mac
-	@rm -f build/Chelka.zip
+dist: app ## Собрать архив для переноса на другой Mac (+ контрольная сумма)
+	@rm -f build/Chelka.zip build/Chelka.zip.sha256
 	@cd build && ditto -c -k --keepParent Chelka.app Chelka.zip
+	@cd build && shasum -a 256 Chelka.zip > Chelka.zip.sha256
 	@echo "архив: build/Chelka.zip"
-	@echo "на другом Mac: распаковать, затем правая кнопка → Открыть"
+	@echo "сумма: $$(cat build/Chelka.zip.sha256)"
+	@echo ""
+	@echo "на другом Mac после скачивания сверить:"
+	@echo "  shasum -a 256 Chelka.zip"
+	@echo "(не совпало с суммой выше — файл побился при передаче, качать заново)"
+	@echo ""
+	@echo "затем: распаковать, правая кнопка → Открыть"
 	@echo "(приложение подписано локальным сертификатом, обычный двойной клик его не пустит)"
+
+pkg: app ## Собрать .pkg-установщик — надёжнее ручной распаковки zip
+	@bash scripts/build-pkg.sh
+	@echo ""
+	@echo "на другом Mac: двойной клик по Chelka.pkg → Installer сам положит в /Applications"
+	@echo "первый запуск всё равно потребует правая кнопка → Открыть (сертификат тот же)"
 
 run: stop app ## Пересобрать и запустить
 	@open $(APP)

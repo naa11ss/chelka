@@ -255,6 +255,7 @@ final class MusicService: ObservableObject {
     private func send(_ command: MusicSourceClient.Command, fallback: @escaping () -> Bool) {
         requestMediaKeyPermissionIfNeeded()
         let source = nowPlaying?.source
+        Log.media.debug("команда \(String(describing: command), privacy: .public), источник \(source?.rawValue ?? "нет", privacy: .public)")
 
         queue.async { [weak self] in
             var handled = false
@@ -262,7 +263,8 @@ final class MusicService: ObservableObject {
                 handled = MusicSourceClient(source: source).send(command)
             }
             if !handled {
-                _ = fallback()
+                let keyResult = fallback()
+                Log.media.debug("медиа-клавиша отправлена: \(keyResult, privacy: .public) (разрешение: \(MediaKeys.isAuthorized, privacy: .public))")
             }
 
             // Плеер отвечает на команду не мгновенно.
