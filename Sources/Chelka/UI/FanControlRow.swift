@@ -38,6 +38,34 @@ struct FanControlRow: View {
     }
 
     var body: some View {
+        if fan.hasKnownRange {
+            regulator
+        } else {
+            // Паспортный диапазон не прочитался (незнакомый на этой модели
+            // тип ключа F{i}Mn/F{i}Mx) — крутить нечем, но сам факт, что
+            // вентилятор существует и его обороты видны, показать всё
+            // равно стоит: это уже полезнее, чем полное молчание.
+            readOnlyRow
+        }
+    }
+
+    private var readOnlyRow: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "fan")
+                .font(.system(size: 8))
+                .foregroundStyle(Color.notchTertiary)
+                .frame(width: 9)
+
+            Text("\(Int(fan.rpm.rounded())) " + T("fan.rpm", "об/мин"))
+                .font(.system(size: 9))
+                .foregroundStyle(Color.notchSecondary)
+
+            Spacer(minLength: 0)
+        }
+        .frame(height: 12)
+    }
+
+    private var regulator: some View {
         HStack(spacing: 5) {
             Image(systemName: "fan")
                 .font(.system(size: 8))

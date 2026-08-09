@@ -75,8 +75,11 @@ final class SMCReader {
     struct FanReading: Equatable {
         let index: Int
         let rpm: Double
-        let minRPM: Double
-        let maxRPM: Double
+        /// `nil`, если диапазон не удалось прочитать (незнакомый тип ключа
+        /// на этой модели) — вентилятор всё равно показываем, просто без
+        /// регулятора: обороты видно, крутить нечем.
+        let minRPM: Double?
+        let maxRPM: Double?
     }
 
     /// Сколько вентиляторов видит SMC. 0 у Air и безвентиляторных Mac mini.
@@ -87,18 +90,22 @@ final class SMCReader {
     }
 
     /// Обороты и паспортный диапазон по каждому вентилятору. Пустой список —
-    /// либо машина без вентилятора, либо ключи для этой модели не входят
-    /// в известный набор.
+    /// либо машина без вентилятора, либо даже число вентиляторов (`FNum`)
+    /// не прочиталось.
+    ///
+    /// Вентилятор попадает в список, если прочитались хотя бы обороты —
+    /// незнакомый тип у `F{i}Mn`/`F{i}Mx` не должен прятать сам факт,
+    /// что вентилятор существует и крутится: это разные проблемы,
+    /// и вторая не обязана маскировать первую.
     func readFans() -> [FanReading] {
         let count = fanCount()
         guard count > 0 else { return [] }
 
         var fans: [FanReading] = []
         for index in 0..<count {
-            guard let rpm = readFloatValue(Self.fanSpeedKey(index)),
-                  let minRPM = readFloatValue("F\(index)Mn"),
-                  let maxRPM = readFloatValue("F\(index)Mx")
-            else { continue }
+            guard let rpm = readFloatValue(Self.fanSpeedKey(index)) else { continue }
+            let minRPM = readFloatValue("F\(index)Mn")
+            let maxRPM = readFloatValue("F\(index)Mx")
             fans.append(FanReading(index: index, rpm: rpm, minRPM: minRPM, maxRPM: maxRPM))
         }
         return fans
@@ -139,6 +146,37 @@ final class SMCReader {
         readFloatValue(Self.fanSpeedKey(index))
     }
 
+    // MARK: - Диагностика
+
+    struct RawKeyDump {
+        let key: String
+        let found: Bool
+        let type: String
+        let size: Int
+        let bytes: [UInt8]
+        /// Что получилось разобрать известными декодерами, если тип знаком.
+        let decodedFloat: Double?
+    }
+
+    /// Сырой снимок ключа независимо от того, понимает ли его текущий
+    /// код: показывает заявленный тип и байты, даже если ни один decode-case
+    /// их не подхватывает. Нужно ровно для случая «на её машине ключ другого
+    /// типа» — без этого метода такой случай выглядел бы просто как «нет
+    /// данных», без единой зацепки, что чинить.
+    func dumpKey(_ key: String) -> RawKeyDump {
+        guard let raw = readRawBytes(key) else {
+            return RawKeyDump(key: key, found: false, type: "", size: 0, bytes: [], decodedFloat: nil)
+        }
+        return RawKeyDump(
+            key: key,
+            found: true,
+            type: raw.type,
+            size: raw.bytes.count,
+            bytes: raw.bytes,
+            decodedFloat: readFloatValue(key)
+        )
+    }
+
     // MARK: - Чтение одного ключа
 
     /// Значение как число с плавающей точкой — годится и для температуры,
@@ -151,16 +189,22 @@ final class SMCReader {
         case "sp78": return SMCValueDecoder.decodeSP78(raw.bytes)
         case "flt ": return SMCValueDecoder.decodeFloat32(raw.bytes)
         case "fpe2": return SMCValueDecoder.decodeFPE2(raw.bytes)
+        case "ui8 ": return SMCValueDecoder.decodeUInt8(raw.bytes).map(Double.init)
         case "ui16": return SMCValueDecoder.decodeUInt16(raw.bytes).map(Double.init)
+        case "ui32": return SMCValueDecoder.decodeUInt32(raw.bytes).map(Double.init)
         default: return nil
         }
     }
 
+    /// Типов у «сколько вентиляторов» за пятнадцать лет моделей встречалось
+    /// больше, чем у показаний оборотов — где-то это просто байт, где-то
+    /// заведено как более широкое целое.
     private func readIntValue(_ key: String) -> Int? {
         guard let raw = readRawBytes(key) else { return nil }
         switch raw.type {
         case "ui8 ": return SMCValueDecoder.decodeUInt8(raw.bytes)
         case "ui16": return SMCValueDecoder.decodeUInt16(raw.bytes)
+        case "ui32": return SMCValueDecoder.decodeUInt32(raw.bytes)
         default: return nil
         }
     }

@@ -41,6 +41,12 @@ public enum SMCValueDecoder {
         bytes.first.map(Int.init)
     }
 
+    public static func decodeUInt32(_ bytes: [UInt8]) -> Int? {
+        guard bytes.count >= 4 else { return nil }
+        let value = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
+        return Int(value)
+    }
+
     // MARK: - Кодирование (для записи целевых оборотов вентилятора)
 
     /// Обратная операция к `decodeFPE2` — целевые обороты в байты для записи.

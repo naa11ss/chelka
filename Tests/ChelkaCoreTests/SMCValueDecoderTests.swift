@@ -95,4 +95,15 @@ struct SMCValueDecoderTests {
         #expect(SMCValueDecoder.decodeUInt8([0x02]) == 2)
         #expect(SMCValueDecoder.decodeUInt8([]) == nil)
     }
+
+    @Test("ui32: четыре байта big-endian")
+    func uint32BigEndian() {
+        #expect(SMCValueDecoder.decodeUInt32([0x00, 0x00, 0x00, 0x02]) == 2)
+        #expect(SMCValueDecoder.decodeUInt32([0x00, 0x00, 0x01, 0x00]) == 256)
+    }
+
+    @Test("ui32: недостаточно байт — nil, не крэш")
+    func uint32TooShort() {
+        #expect(SMCValueDecoder.decodeUInt32([0x00, 0x02]) == nil)
+    }
 }

@@ -32,6 +32,7 @@
 "thermal.serious" = "hot";
 "thermal.critical" = "overheating";
 "fan.auto" = "Auto";
+"fan.rpm" = "rpm";
 
 /* Clipboard */
 "clipboard.empty" = "Copy something — it will show up here";

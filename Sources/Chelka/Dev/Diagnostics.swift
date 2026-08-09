@@ -58,18 +58,47 @@ enum Diagnostics {
             print(String(format: "    %-6@ %6.2f °C", sensor.name as NSString, sensor.celsius))
         }
 
-        let fans = smc.readFans()
+        // Сырой дамп независимо от того, распознан ли тип: если FNum или
+        // F0Ac молчат в «нормальном» выводе выше, здесь будет видно —
+        // ключ не отвечает вообще, или отвечает, но незнакомым типом.
         print("")
-        print("Вентиляторы: \(fans.isEmpty ? "нет (безвентиляторная модель либо ключи не опознаны)" : "\(fans.count)")")
-        for fan in fans {
-            print(String(format: "    вентилятор %d: %.0f об/мин (диапазон %.0f…%.0f)", fan.index, fan.rpm, fan.minRPM, fan.maxRPM))
+        print("Сырой дамп ключевых полей (для разбора, если вентиляторы не нашлись):")
+        let rawKeys = ["FNum", "F0Ac", "F0Mn", "F0Mx", "F0Md", "F1Ac", "F1Mn", "F1Mx", "F1Md"]
+        for key in rawKeys {
+            let dump = smc.dumpKey(key)
+            if !dump.found {
+                print("    \(key): ключ не отвечает")
+                continue
+            }
+            let bytesHex = dump.bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+            let decoded = dump.decodedFloat.map { String(format: ", разобрано как %.1f", $0) } ?? ", тип не распознан текущим кодом"
+            print("    \(key): тип=«\(dump.type)» размер=\(dump.size) байты=[\(bytesHex)]\(decoded)")
         }
 
-        guard let first = fans.first else { return }
+        let fans = smc.readFans()
+        print("")
+        print("Вентиляторы: \(fans.isEmpty ? "нет" : "\(fans.count)")")
+        for fan in fans {
+            let range: String
+            if let minRPM = fan.minRPM, let maxRPM = fan.maxRPM {
+                range = String(format: "диапазон %.0f…%.0f", minRPM, maxRPM)
+            } else {
+                range = "диапазон не определён — регулятор недоступен"
+            }
+            print(String(format: "    вентилятор %d: %.0f об/мин, %@", fan.index, fan.rpm, range))
+        }
+
+        guard let first = fans.first, let minRPM = first.minRPM, let maxRPM = first.maxRPM else {
+            if !fans.isEmpty {
+                print("")
+                print("Пробную запись пропускаю: паспортный диапазон первого вентилятора не известен.")
+            }
+            return
+        }
 
         print("")
         print("Пробная запись на вентиляторе \(first.index): 50% от диапазона…")
-        let targetRPM = (first.minRPM + first.maxRPM) / 2
+        let targetRPM = (minRPM + maxRPM) / 2
         let writeOK = smc.setFanOverride(index: first.index, targetRPM: targetRPM)
         print("    запись: \(writeOK ? "принята" : "отклонена")")
 

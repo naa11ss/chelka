@@ -166,21 +166,25 @@ final class MetricsService: ObservableObject {
 
     /// Пусто на моделях без вентилятора (Air и часть Mac mini) —
     /// карточка в интерфейсе просто не рисует блок оборотов и регулятор.
+    /// Вентилятор без известного диапазона всё равно попадает в список —
+    /// просто без регулятора, только с показаниями оборотов.
     private func readFans() -> [FanSpeed] {
         smcReader.readFans().map { reading in
             // Паспортный диапазон фиксирован железом — кэшируем при первом
             // успешном чтении вместо того, чтобы спрашивать SMC заново
             // на каждом тике ради чисел, которые не могут измениться.
-            if fanLimits[reading.index] == nil {
-                fanLimits[reading.index] = (reading.minRPM, reading.maxRPM)
+            // Если в этот раз диапазон не прочитался, но раньше читался —
+            // не затираем кэш пустотой из-за случайного сбоя одного опроса.
+            if let minRPM = reading.minRPM, let maxRPM = reading.maxRPM {
+                fanLimits[reading.index] = (minRPM, maxRPM)
             }
-            let limits = fanLimits[reading.index] ?? (reading.minRPM, reading.maxRPM)
+            let limits = fanLimits[reading.index]
 
             return FanSpeed(
                 index: reading.index,
                 rpm: reading.rpm,
-                minRPM: limits.min,
-                maxRPM: limits.max,
+                minRPM: limits?.min,
+                maxRPM: limits?.max,
                 override: fanOverrides[reading.index] ?? .auto
             )
         }

@@ -137,11 +137,14 @@ public enum SystemTemperature {
 public struct FanSpeed: Sendable, Equatable, Identifiable {
     public let index: Int
     public let rpm: Double
-    public let minRPM: Double
-    public let maxRPM: Double
+    /// `nil`, если паспортный диапазон не прочитался (незнакомый тип ключа
+    /// на этой модели). Обороты всё равно показываем — регулятора просто
+    /// не будет, крутить его не от чего.
+    public let minRPM: Double?
+    public let maxRPM: Double?
     public let override: FanOverride
 
-    public init(index: Int, rpm: Double, minRPM: Double, maxRPM: Double, override: FanOverride = .auto) {
+    public init(index: Int, rpm: Double, minRPM: Double?, maxRPM: Double?, override: FanOverride = .auto) {
         self.index = index
         self.rpm = rpm
         self.minRPM = minRPM
@@ -151,10 +154,16 @@ public struct FanSpeed: Sendable, Equatable, Identifiable {
 
     public var id: Int { index }
 
+    /// Известен ли паспортный диапазон — от этого зависит, можно ли
+    /// вообще показать регулятор для этого вентилятора.
+    public var hasKnownRange: Bool { minRPM != nil && maxRPM != nil }
+
     /// Текущие обороты, выраженные в проценте от паспортного диапазона —
-    /// то же число, что показывает регулятор в интерфейсе.
+    /// то же число, что показывает регулятор в интерфейсе. 0, если
+    /// диапазон не известен: регулятор в этом случае и так не рисуется.
     public var currentPercent: Int {
-        FanPercent.percent(forRPM: rpm, minRPM: minRPM, maxRPM: maxRPM)
+        guard let minRPM, let maxRPM else { return 0 }
+        return FanPercent.percent(forRPM: rpm, minRPM: minRPM, maxRPM: maxRPM)
     }
 }
 
