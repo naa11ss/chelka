@@ -44,6 +44,25 @@ enum HoverDemo {
             expectsPassThrough: true
         ),
         Step(
+            label: "чуть ниже выреза, где курсор видно — должно раскрыться",
+            point: { layout in
+                NSPoint(
+                    x: layout.collapsedRectScreen.midX,
+                    y: layout.collapsedRectScreen.minY - 8
+                )
+            },
+            holdSeconds: 0.9,
+            expected: .expanded,
+            expectsPassThrough: false
+        ),
+        Step(
+            label: "ушёл от выреза — свернулось",
+            point: { layout in NSPoint(x: layout.panelFrame.minX - 250, y: layout.panelFrame.minY - 250) },
+            holdSeconds: 0.9,
+            expected: .collapsed,
+            expectsPassThrough: true
+        ),
+        Step(
             label: "завис на вырезе — должно раскрыться",
             point: { layout in NSPoint(x: layout.collapsedRectScreen.midX, y: layout.collapsedRectScreen.midY) },
             holdSeconds: 0.9,

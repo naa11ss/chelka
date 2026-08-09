@@ -39,6 +39,13 @@ struct MusicCard: View {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                } else if let icon = service.audioSource?.icon {
+                    // Обложки нет, но известно приложение — его значок
+                    // говорит больше, чем безликая нота.
+                    Image(nsImage: icon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(6)
                 } else {
                     Image(systemName: "music.note")
                         .font(.system(size: 15))
@@ -58,11 +65,14 @@ struct MusicCard: View {
     }
 
     private var placeholderTitle: String {
+        if let source = service.audioSource {
+            // Заголовок вкладки, если удалось узнать, иначе имя приложения.
+            return source.detail ?? source.name
+        }
+
         switch service.status {
         case .automationDenied(let source):
             return String(format: T("music.denied", "Нет доступа к %@"), source.displayName)
-        case .noSupportedPlayer:
-            return T("music.nothing", "Ничего не играет")
         default:
             return T("music.nothing", "Ничего не играет")
         }
@@ -92,6 +102,12 @@ struct MusicCard: View {
     }
 
     private var hintText: String {
+        if let source = service.audioSource {
+            let playing = String(format: T("music.playingIn", "Играет в %@"), source.name)
+            guard service.needsMediaKeyPermission else { return playing }
+            return playing + " · " + T("music.keys.needed", "нажми кнопку, чтобы разрешить управление")
+        }
+
         switch service.status {
         case .automationDenied:
             return T("music.denied.hint", "Разреши управление в Настройках → Конфиденциальность")
@@ -109,7 +125,7 @@ struct MusicCard: View {
             HStack(spacing: 14) {
                 controlButton("backward.fill", action: service.previous)
                 controlButton(
-                    service.nowPlaying?.isPlaying == true ? "pause.fill" : "play.fill",
+                    isSomethingPlaying ? "pause.fill" : "play.fill",
                     action: service.playPause
                 )
                 controlButton("forward.fill", action: service.next)
@@ -133,6 +149,11 @@ struct MusicCard: View {
                 .clipShape(Capsule())
                 .animation(.linear(duration: 1), value: playing.progress(at: clock))
         }
+    }
+
+    /// Играет ли что-нибудь — неважно, знаем мы название трека или нет.
+    private var isSomethingPlaying: Bool {
+        service.nowPlaying?.isPlaying == true || service.audioSource != nil
     }
 
     private func controlButton(_ symbol: String, action: @escaping () -> Void) -> some View {

@@ -158,3 +158,88 @@ struct NotchLayoutCoordinateTests {
         #expect(expanded.maxY <= layout.panelFrame.height)
     }
 }
+
+@Suite("Зона наведения и привязка к меню-бару")
+struct HoverAnchorTests {
+
+    private let notchScreen = ScreenMetrics(
+        frame: CGRect(x: 0, y: 0, width: 1710, height: 1112),
+        safeAreaTop: 38,
+        auxiliaryLeftWidth: 751,
+        auxiliaryRightWidth: 750,
+        menuBarHeight: 22
+    )
+
+    private let plainScreen = ScreenMetrics(
+        frame: CGRect(x: 0, y: 0, width: 2560, height: 1440),
+        safeAreaTop: 0,
+        auxiliaryLeftWidth: nil,
+        auxiliaryRightWidth: nil,
+        menuBarHeight: 24
+    )
+
+    @Test("Зона наведения свисает ниже выреза — целиться в невидимый курсор не надо")
+    func hoverExtendsBelowNotch() {
+        let layout = NotchGeometry.layout(for: notchScreen)
+        let notch = layout.collapsedRectScreen
+
+        #expect(layout.hoverRectScreen.minY < notch.minY)
+        #expect(notch.minY - layout.hoverRectScreen.minY == NotchMetrics.default.hoverBelowNotch)
+        #expect(layout.hoverRectScreen.height > notch.height)
+    }
+
+    @Test("Зона наведения шире выреза с обеих сторон")
+    func hoverIsWiderThanNotch() {
+        let layout = NotchGeometry.layout(for: notchScreen)
+        let notch = layout.collapsedRectScreen
+        let inset = NotchMetrics.default.hoverInset
+
+        #expect(notch.minX - layout.hoverRectScreen.minX == inset)
+        #expect(layout.hoverRectScreen.maxX - notch.maxX == inset)
+    }
+
+    @Test("Зона наведения покрывает весь вырез целиком")
+    func hoverCoversWholeNotch() {
+        let layout = NotchGeometry.layout(for: notchScreen)
+        #expect(layout.hoverRectScreen.contains(layout.collapsedRectScreen))
+    }
+
+    @Test("На экране без выреза виджет открывается от значка в меню-баре")
+    func anchorsToMenuBarItem() {
+        // Значок правее центра — там, куда его поставил пользователь.
+        let anchor = CGRect(x: 2100, y: 1416, width: 24, height: 24)
+        let layout = NotchGeometry.layout(for: plainScreen, anchor: anchor)
+
+        #expect(layout.kind == .menuBarItem)
+        #expect(layout.collapsedRectScreen == anchor)
+        #expect(layout.hoverRectScreen.contains(anchor))
+        // Раскрытый виджет тянется к значку, а не к центру экрана.
+        #expect(abs(layout.expandedRectScreen.midX - anchor.midX) < 1)
+    }
+
+    @Test("Значок у самого края экрана не выталкивает виджет за границу")
+    func anchorNearEdgeStaysOnScreen() {
+        let anchor = CGRect(x: 2530, y: 1416, width: 24, height: 24)
+        let layout = NotchGeometry.layout(for: plainScreen, anchor: anchor)
+
+        #expect(layout.expandedRectScreen.maxX <= plainScreen.frame.maxX)
+        #expect(layout.panelFrame.maxX <= plainScreen.frame.maxX)
+    }
+
+    @Test("Значок с другого экрана игнорируется")
+    func anchorFromOtherScreenIgnored() {
+        let anchorElsewhere = CGRect(x: -900, y: 1416, width: 24, height: 24)
+        let layout = NotchGeometry.layout(for: plainScreen, anchor: anchorElsewhere)
+
+        #expect(layout.kind == .synthetic)
+    }
+
+    @Test("На экране с вырезом значок не влияет ни на что")
+    func anchorIgnoredWhenNotchPresent() {
+        let anchor = CGRect(x: 1400, y: 1090, width: 24, height: 24)
+        let layout = NotchGeometry.layout(for: notchScreen, anchor: anchor)
+
+        #expect(layout.kind == .hardware)
+        #expect(layout.collapsedRectScreen.width == 209)
+    }
+}

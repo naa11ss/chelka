@@ -22,6 +22,8 @@
 "music.denied" = "No access to %@";
 "music.denied.hint" = "Allow control in Settings → Privacy";
 "music.keys.hint" = "Buttons work with Music and Spotify";
+"music.playingIn" = "Playing in %@";
+"music.keys.needed" = "press a button to allow control";
 
 /* Metrics */
 "metrics.heat" = "Heat";

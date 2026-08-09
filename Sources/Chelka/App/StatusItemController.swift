@@ -31,6 +31,13 @@ final class StatusItemController: NSObject {
             .store(in: &cancellables)
     }
 
+    /// Прямоугольник значка в экранных координатах.
+    /// По нему виджет открывается на экранах без выреза.
+    var buttonScreenFrame: CGRect? {
+        guard let window = statusItem.button?.window else { return nil }
+        return window.frame
+    }
+
     private func configureButton() {
         guard let button = statusItem.button else { return }
         button.image = NSImage(

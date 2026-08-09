@@ -35,6 +35,9 @@ struct NotchRootView: View {
     @ViewBuilder
     private var surface: some View {
         switch (model.layout.kind, model.state) {
+        case (.menuBarItem, .collapsed):
+            // Свёрнутый вид — это сам значок в меню-баре, рисовать нечего.
+            Color.clear
         case (.synthetic, .collapsed):
             syntheticHandle
         default:
@@ -89,9 +92,7 @@ struct NotchRootView: View {
             ? model.layout.expandedRectInSwiftUI
             : model.layout.collapsedRectInSwiftUI
 
-        guard model.layout.kind == .hardware || model.state == .expanded else {
-            return base
-        }
+        guard model.state == .expanded else { return base }
         return base.insetBy(dx: -DS.flare, dy: 0)
     }
 }

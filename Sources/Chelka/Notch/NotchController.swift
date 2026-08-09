@@ -41,6 +41,11 @@ final class NotchController {
     /// ту же позицию, что и обработчик событий — иначе они спорят.
     var cursorProvider: () -> NSPoint = { NSEvent.mouseLocation }
 
+    /// Где стоит значок в меню-баре. На экранах без выреза виджет
+    /// открывается от него: пользователь сам решил, где ему быть,
+    /// и искать середину верхней кромки не должен.
+    var anchorProvider: () -> CGRect? = { nil }
+
     private let clipboard: ClipboardService
     private let metrics: MetricsService
     private let music: MusicService
@@ -63,6 +68,7 @@ final class NotchController {
     // MARK: - Жизненный цикл
 
     func start() {
+        layout = computeLayout()
         buildPanel()
         applyTheme()
 
@@ -283,7 +289,33 @@ final class NotchController {
     /// Пропускает ли окно клики насквозь прямо сейчас.
     var panelIgnoresMouseEvents: Bool { panel?.ignoresMouseEvents ?? true }
 
+    private func computeLayout() -> NotchLayout {
+        let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
+        return NotchGeometry.layout(for: metrics, anchor: anchorProvider())
+    }
+
+    /// Значок в меню-баре ездит, когда соседи появляются и исчезают.
+    /// Пересобираем раскладку, только если он действительно уехал.
+    private func syncAnchorIfNeeded() {
+        guard layout.kind != .hardware else { return }
+        guard let anchor = anchorProvider() else { return }
+
+        let current = layout.collapsedRectScreen
+        let moved = abs(anchor.minX - current.minX) > 1
+            || abs(anchor.minY - current.minY) > 1
+            || abs(anchor.width - current.width) > 1
+
+        guard moved else { return }
+
+        let newLayout = computeLayout()
+        guard newLayout != layout else { return }
+
+        layout = newLayout
+        applyLayoutToPanel()
+    }
+
     private func handleMouseMoved(to point: NSPoint) {
+        syncAnchorIfNeeded()
         let inside = isCursorInside(point)
         let previous = stateMachine.state
         let next = stateMachine.update(inside: inside, now: MonotonicClock.now)
@@ -364,8 +396,7 @@ final class NotchController {
     }
 
     private func rebuildForCurrentScreens() {
-        let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
-        let newLayout = NotchGeometry.layout(for: metrics)
+        let newLayout = computeLayout()
         guard newLayout != layout else { return }
 
         Log.notch.info("конфигурация экранов изменилась, пересобираю раскладку")

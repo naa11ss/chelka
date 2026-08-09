@@ -22,6 +22,15 @@ enum MusicDemo {
             RunLoop.main.run(until: Date().addingTimeInterval(seconds))
         }
 
+        /// Ждём результата, а не «примерно столько должно хватить»:
+        /// опрос идёт во внешних процессах, и время у него плавает.
+        func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 8) {
+            let deadline = Date().addingTimeInterval(timeout)
+            while !condition() && Date() < deadline {
+                settle(0.1)
+            }
+        }
+
         print("проверка музыкального модуля")
         print("")
 
@@ -40,7 +49,7 @@ enum MusicDemo {
         // 3. Закрытые плееры не будятся опросом.
         let runningBefore = MusicSource.allCases.filter { AppleScriptBridge.isRunning(bundleID: $0.bundleID) }
         service.refresh()
-        settle(1.5)
+        waitUntil { service.status != .idle }
         let runningAfter = MusicSource.allCases.filter { AppleScriptBridge.isRunning(bundleID: $0.bundleID) }
 
         check("опрос не запускает закрытые плееры",
@@ -48,9 +57,12 @@ enum MusicDemo {
               detail: runningAfter.isEmpty ? "запущенных плееров нет" : runningAfter.map(\.displayName).joined(separator: ", "))
 
         // 4. Состояние соответствует обстановке.
+        let externalAudioPlaying: Bool
+        if case .externalAudio = service.status { externalAudioPlaying = true } else { externalAudioPlaying = false }
+
         if runningAfter.isEmpty {
-            check("без плееров сообщается о запасном пути",
-                  service.status == .noSupportedPlayer,
+            check("без плееров сообщается о запасном пути или о чужом звуке",
+                  service.status == .noSupportedPlayer || externalAudioPlaying,
                   detail: String(describing: service.status))
             check("трека нет", service.nowPlaying == nil)
         } else {
@@ -64,7 +76,32 @@ enum MusicDemo {
             }
         }
 
-        // 5. Опрос обязан останавливаться.
+        // 5. Источник звука виден для любого приложения.
+        let sources = AudioSourceMonitor.currentSources()
+        print("")
+        if sources.isEmpty {
+            print("  сейчас звук никто не выводит — проверку источника пропускаю")
+        } else {
+            for source in sources {
+                print("  источник звука: \(source.name) (\(source.bundleID))")
+            }
+            check("источник звука определён как приложение, а не вспомогательный процесс",
+                  sources.allSatisfy { !$0.bundleID.contains(".helper") && !$0.bundleID.hasPrefix("com.apple.WebKit") },
+                  detail: sources.map(\.bundleID).joined(separator: ", "))
+
+            service.refresh()
+            waitUntil { service.audioSource != nil }
+            check("сервис показывает играющее приложение",
+                  service.audioSource != nil || service.nowPlaying?.isPlaying == true,
+                  detail: service.audioSource?.name ?? "нет")
+
+            if let source = service.audioSource, BrowserTabTitle.isBrowser(source.bundleID) {
+                print("  вкладка: \(source.detail ?? "название не получено — нет разрешения на управление браузером")")
+            }
+        }
+        print("")
+
+        // 6. Опрос обязан останавливаться.
         service.startPolling(interval: 0.5)
         settle(0.3)
         let wasPolling = service.isPolling

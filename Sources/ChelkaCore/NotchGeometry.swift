@@ -36,7 +36,9 @@ public struct ScreenMetrics: Sendable, Equatable {
 public enum NotchKind: Sendable, Equatable {
     /// Аппаратный вырез: свёрнутый вид невидим, работает только зона наведения.
     case hardware
-    /// Экран без выреза: рисуем видимый кругляш по центру сверху.
+    /// Экран без выреза: виджет открывается от значка в меню-баре.
+    case menuBarItem
+    /// Экран без выреза и значок неизвестен: кругляш по центру сверху.
     case synthetic
 }
 
@@ -48,19 +50,27 @@ public struct NotchMetrics: Sendable, Equatable {
     public var syntheticDiameter: CGFloat
     /// Отступ панели от краёв экрана — запас под тень и анимацию.
     public var panelPadding: CGFloat
-    /// Насколько расширяется зона наведения вокруг свёрнутого вида.
+    /// Насколько зона наведения шире свёрнутого вида с каждой стороны.
     public var hoverInset: CGFloat
+    /// Насколько зона наведения свисает ниже выреза.
+    ///
+    /// Внутри самого выреза курсор не виден — целиться туда неудобно.
+    /// Полоска под вырезом попадает в пустую середину меню-бара,
+    /// где курсор виден и куда легко попасть движением сверху вниз.
+    public var hoverBelowNotch: CGFloat
 
     public init(
         expandedSize: CGSize = CGSize(width: 720, height: 272),
         syntheticDiameter: CGFloat = 22,
         panelPadding: CGFloat = 24,
-        hoverInset: CGFloat = 4
+        hoverInset: CGFloat = 10,
+        hoverBelowNotch: CGFloat = 20
     ) {
         self.expandedSize = expandedSize
         self.syntheticDiameter = syntheticDiameter
         self.panelPadding = panelPadding
         self.hoverInset = hoverInset
+        self.hoverBelowNotch = hoverBelowNotch
     }
 
     public static let `default` = NotchMetrics()
@@ -119,10 +129,23 @@ public struct NotchLayout: Sendable, Equatable {
 /// вырезов конкретных моделей — только то, что сообщила система.
 public enum NotchGeometry {
 
-    public static func layout(for screen: ScreenMetrics, metrics: NotchMetrics = .default) -> NotchLayout {
+    /// - Parameter anchor: прямоугольник значка в меню-баре. На экранах без
+    ///   выреза виджет открывается от него: значок стоит там, куда его
+    ///   поставил пользователь, а не по центру верхней кромки.
+    public static func layout(
+        for screen: ScreenMetrics,
+        metrics: NotchMetrics = .default,
+        anchor: CGRect? = nil
+    ) -> NotchLayout {
         if let collapsed = hardwareNotchRect(for: screen) {
             return makeLayout(kind: .hardware, collapsed: collapsed, screen: screen, metrics: metrics)
         }
+
+        // Значок в меню-баре, если он известен и находится на этом экране.
+        if let anchor, screen.frame.intersects(anchor) {
+            return makeLayout(kind: .menuBarItem, collapsed: anchor, screen: screen, metrics: metrics)
+        }
+
         return makeLayout(
             kind: .synthetic,
             collapsed: syntheticRect(for: screen, metrics: metrics),
@@ -180,13 +203,19 @@ public enum NotchGeometry {
         )
         panel = clampHorizontally(panel, within: screen.frame)
 
-        // Зона наведения: свёрнутый вид плюс небольшой запас,
-        // растянутый до самого верха экрана (мышь у края не «проваливается»).
+        // Зона наведения шире и ниже свёрнутого вида: внутри выреза курсор
+        // не виден, и попадать туда вслепую неудобно. Полоса под вырезом
+        // приходится на пустую середину меню-бара.
+        let hoverTop = screen.frame.maxY
+        let hoverBottom = max(
+            screen.frame.minY,
+            collapsed.minY - metrics.hoverBelowNotch
+        )
         let hover = CGRect(
             x: collapsed.minX - metrics.hoverInset,
-            y: collapsed.minY,
+            y: hoverBottom,
             width: collapsed.width + metrics.hoverInset * 2,
-            height: screen.frame.maxY - collapsed.minY
+            height: hoverTop - hoverBottom
         )
 
         return NotchLayout(

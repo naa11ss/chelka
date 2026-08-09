@@ -18,11 +18,16 @@ final class MusicService: ObservableObject {
         case automationDenied(MusicSource)
         /// Ни Music, ни Spotify не запущены: остаются медиа-клавиши.
         case noSupportedPlayer
+        /// Звук идёт из приложения, которое метаданных не отдаёт —
+        /// браузер, видеоплеер, что угодно.
+        case externalAudio(AudioSource)
     }
 
     @Published private(set) var nowPlaying: NowPlaying?
     @Published private(set) var artwork: NSImage?
     @Published private(set) var status: Status = .idle
+    /// Приложение, выводящее звук, когда метаданных получить неоткуда.
+    @Published private(set) var audioSource: AudioSource?
 
     private var timer: Timer?
     private var observers: [NSObjectProtocol] = []
@@ -109,22 +114,40 @@ final class MusicService: ObservableObject {
 
             let best = NowPlayingSelection.best(from: found)
 
+            // Метаданных от Music и Spotify может не быть вовсе — тогда
+            // смотрим, кто вообще выводит звук. Это работает для браузера,
+            // локального видео и любого другого источника.
+            var external: AudioSource?
+            if best == nil || best?.isPlaying != true {
+                external = AudioSourceMonitor.currentSources().first
+                if let source = external, BrowserTabTitle.isBrowser(source.bundleID) {
+                    external?.detail = BrowserTabTitle.title(for: source.bundleID)
+                }
+            }
+
             // Возврат на главный поток через очередь, а не через `Task`:
             // задачи главного актора не выполняются во вложенном цикле
             // событий, а он встречается и в обычной работе — например,
             // пока открыто модальное окно.
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.apply(best: best, denied: denied, anyRunning: anyRunning)
+                    self?.apply(best: best, denied: denied, anyRunning: anyRunning, external: external)
                 }
             }
         }
     }
 
-    private func apply(best: NowPlaying?, denied: MusicSource?, anyRunning: Bool) {
+    private func apply(best: NowPlaying?, denied: MusicSource?, anyRunning: Bool, external: AudioSource?) {
         defer { isQuerying = false }
 
-        if let denied {
+        audioSource = external
+
+        if best?.isPlaying == true {
+            status = .connected
+        } else if let external {
+            // Играет что-то другое — это важнее, чем поставленный на паузу Music.
+            status = .externalAudio(external)
+        } else if let denied {
             status = .automationDenied(denied)
         } else if !anyRunning {
             status = .noSupportedPlayer
@@ -132,8 +155,13 @@ final class MusicService: ObservableObject {
             status = .connected
         }
 
-        let trackChanged = !(best?.isSameTrack(as: nowPlaying) ?? (nowPlaying == nil))
-        nowPlaying = best
+        // Пока звук идёт из чужого приложения, поставленный на паузу трек
+        // показывать нельзя: пользователь слушает не его.
+        let effective = (best?.isPlaying == true || external == nil) ? best : nil
+
+        let trackChanged = !(effective?.isSameTrack(as: nowPlaying) ?? (nowPlaying == nil))
+        nowPlaying = effective
+        let best = effective
 
         if best == nil {
             artwork = nil
@@ -171,6 +199,7 @@ final class MusicService: ObservableObject {
     func previous() { send(.previous, fallback: MediaKeys.previous) }
 
     private func send(_ command: MusicSourceClient.Command, fallback: @escaping () -> Bool) {
+        requestMediaKeyPermissionIfNeeded()
         let source = nowPlaying?.source
 
         queue.async { [weak self] in
@@ -189,8 +218,15 @@ final class MusicService: ObservableObject {
         }
     }
 
-    /// Нужны ли пользователю дополнительные разрешения для управления.
+    /// Управление доступно только через медиа-клавиши, а разрешения на них нет.
     var needsMediaKeyPermission: Bool {
         nowPlaying == nil && !MediaKeys.isAuthorized
+    }
+
+    /// Просит разрешение на медиа-клавиши. Вызывается по нажатию кнопки,
+    /// а не при запуске: выпрашивать доступ на пустом месте незачем.
+    func requestMediaKeyPermissionIfNeeded() {
+        guard needsMediaKeyPermission else { return }
+        MediaKeys.requestAuthorization()
     }
 }

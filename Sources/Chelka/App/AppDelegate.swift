@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenSettings: { [weak self] in self?.settingsWindow.show() }
         )
 
+        // Виджет должен знать, где стоит значок, до первого показа.
+        notchController.anchorProvider = { [weak self] in self?.statusItemController.buttonScreenFrame }
+
         clipboardService.start()
         musicService.start()
         notchController.start()
