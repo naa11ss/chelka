@@ -13,7 +13,8 @@ let package = Package(
         // всё тестируется без экрана и без запуска приложения.
         .target(
             name: "ChelkaCore",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6)],
+            linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         // UI-слой: AppKit/SwiftUI, режим Swift 5 — иначе строгая конкурентность
         // ломается о неаннотированные места системных фреймворков.
