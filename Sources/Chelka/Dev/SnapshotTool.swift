@@ -60,7 +60,10 @@ enum SnapshotTool {
         // Метрики снимаем настоящие: прочерки на снимках в документации
         // выглядят как неработающая функция.
         demoMetrics.startSampling(interval: 0.3)
-        RunLoop.main.run(until: Date().addingTimeInterval(1.2))
+        // И музыку тоже: прочерки в документации выглядят как неработающая
+        // функция, хотя всё работает.
+        demoMusic.startPolling(interval: 0.5)
+        RunLoop.main.run(until: Date().addingTimeInterval(2.5))
 
         let directory = URL(fileURLWithPath: (outputDirectory as NSString).expandingTildeInPath)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

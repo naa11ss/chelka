@@ -103,9 +103,9 @@ struct MusicCard: View {
 
     private var hintText: String {
         if let source = service.audioSource {
-            let playing = String(format: T("music.playingIn", "Играет в %@"), source.name)
-            guard service.needsMediaKeyPermission else { return playing }
-            return playing + " · " + T("music.keys.needed", "нажми кнопку, чтобы разрешить управление")
+            // Про разрешение не пишем: нажатие кнопки само вызовет запрос,
+            // а длинная подпись в строке шириной с половину виджета не читается.
+            return String(format: T("music.playingIn", "Играет в %@"), source.name)
         }
 
         switch service.status {
