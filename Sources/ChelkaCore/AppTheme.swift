@@ -8,9 +8,9 @@ public enum AppTheme: String, CaseIterable, Sendable, Codable {
 
     public var localizedTitle: String {
         switch self {
-        case .system: return String(localized: "theme.system", defaultValue: "Авто")
-        case .light: return String(localized: "theme.light", defaultValue: "Светлая")
-        case .dark: return String(localized: "theme.dark", defaultValue: "Тёмная")
+        case .system: return T("theme.system", "Авто")
+        case .light: return T("theme.light", "Светлая")
+        case .dark: return T("theme.dark", "Тёмная")
         }
     }
 }

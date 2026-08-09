@@ -1,0 +1,89 @@
+/* Chelka — English */
+
+/* Menu bar */
+"menu.toggle" = "Show widget";
+"menu.settings" = "Settings…";
+"menu.theme" = "Theme";
+"menu.quit" = "Quit";
+
+/* Themes */
+"theme.system" = "Auto";
+"theme.light" = "Light";
+"theme.dark" = "Dark";
+
+/* Widget cards */
+"card.music" = "Music";
+"card.system" = "System";
+"card.clipboard" = "Clipboard";
+
+/* Music */
+"music.nothing" = "Nothing playing";
+"music.sources" = "Music · Spotify";
+"music.denied" = "No access to %@";
+"music.denied.hint" = "Allow control in Settings → Privacy";
+"music.keys.hint" = "Buttons work with Music and Spotify";
+
+/* Metrics */
+"metrics.heat" = "Heat";
+"thermal.nominal" = "normal";
+"thermal.fair" = "warm";
+"thermal.serious" = "hot";
+"thermal.critical" = "overheating";
+
+/* Clipboard */
+"clipboard.empty" = "Copy something — it will show up here";
+"clipboard.memoryOnly" = "memory only";
+"clipboard.pinnedShort" = "pinned";
+"clipboard.copied" = "Copied";
+"clipboard.pin" = "Pin";
+"clipboard.unpin" = "Unpin";
+"clipboard.delete" = "Delete";
+"clipboard.tooltip" = "Click to copy · Drag to take it out";
+"clipboard.rejected.concealed" = "Skipped password manager content";
+"clipboard.rejected.blacklisted" = "%@ is blocklisted";
+"clipboard.rejected.tooLarge" = "Entry too large — %@";
+"clipboard.pinLimit" = "Pin limit reached — %d";
+
+/* Settings */
+"settings.title" = "Chelka Settings";
+"settings.tab.general" = "General";
+"settings.tab.clipboard" = "Clipboard";
+"settings.tab.permissions" = "Permissions";
+"settings.tab.about" = "About";
+"settings.theme" = "Theme:";
+"settings.launchAtLogin" = "Launch at login";
+"settings.launchBlocked" = "Launch at login is blocked in System Settings → Login Items.";
+"settings.launchFailed" = "Could not change launch at login.";
+"settings.hotkey" = "Open widget:";
+"settings.hotkey.hint" = "While the widget is open via the shortcut, keys 1…9 pick an entry and Esc closes it.";
+"settings.capture" = "What to capture";
+"settings.captureScreenshots" = "Screenshots from the screenshot folder";
+"settings.skipConcealed" = "Skip password manager content";
+"settings.capture.hint" = "Everything you copy is saved by default, passwords included. History is encrypted on disk, but password managers mark their content — this switch makes the widget ignore such entries.";
+"settings.blacklist" = "Blocklisted apps";
+"settings.blacklist.empty" = "Empty. Add an app so anything copied while it is active is not saved.";
+"settings.blacklist.remove" = "Remove";
+"settings.blacklist.add" = "Add the last active app…";
+"settings.entries" = "Entries:";
+"settings.entries.value" = "%1$d of %2$d, %3$d of %4$d pinned";
+"settings.clear" = "Clear history";
+"settings.clear.confirm" = "Clear clipboard history?";
+"settings.clear.keepPinned" = "Clear, keep pinned";
+"settings.clear.all" = "Clear everything";
+"settings.cancel" = "Cancel";
+"settings.configure" = "Configure";
+"settings.about.tagline" = "A MacBook notch widget: clipboard, music and system state on hover.";
+
+/* Permissions */
+"permission.accessibility" = "Accessibility";
+"permission.accessibility.why" = "Needed only for media keys: they control the browser and players other than Music and Spotify.";
+"permission.accessibility.cost" = "Without it the buttons only work with Music and Spotify.";
+"permission.automation" = "Control Music and Spotify";
+"permission.automation.why" = "This is how the widget gets the track name, artwork and playback position.";
+"permission.automation.cost" = "Without it only buttons remain, with no track name.";
+"permission.screenshots" = "Access to the screenshot folder";
+"permission.screenshots.why" = "Screenshots go to a file, not the clipboard. The widget watches the %@ folder.";
+"permission.screenshots.cost" = "Without it ⇧⌘4 screenshots will not reach the history.";
+"permission.keychain" = "Encryption key in the keychain";
+"permission.keychain.why" = "Clipboard history is encrypted, the key is stored in the keychain.";
+"permission.keychain.cost" = "Without it the history only lives until you quit.";

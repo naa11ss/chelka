@@ -29,6 +29,12 @@ cp "$BIN_PATH" "$BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$ROOT/Resources/Info.plist" "$BUNDLE/Contents/Info.plist"
 printf 'APPL????' > "$BUNDLE/Contents/PkgInfo"
 
+# Локализации кладём прямо в Contents/Resources: ядро слинковано статически,
+# и NSLocalizedString ищет переводы в Bundle.main, а не в отдельном бандле.
+for LPROJ in "$ROOT/Resources"/*.lproj; do
+	[[ -d "$LPROJ" ]] && cp -R "$LPROJ" "$BUNDLE/Contents/Resources/"
+done
+
 # SPM кладёт ресурсные бандлы рядом с бинарником — переносим их внутрь .app,
 # иначе Bundle.module не найдёт локализации.
 shopt -s nullglob

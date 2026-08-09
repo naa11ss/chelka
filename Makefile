@@ -39,7 +39,10 @@ metrics-demo: build stop ## Проверка метрик на живой маш
 music-demo: build stop ## Проверка музыкального модуля (плееры не запускает)
 	@.build/debug/Chelka --music-demo
 
-verify: test hover-demo clipboard-demo metrics-demo music-demo snapshots ## Все проверки разом
+settings-demo: build stop ## Проверка окна настроек
+	@.build/debug/Chelka --settings-demo
+
+verify: test hover-demo clipboard-demo metrics-demo music-demo settings-demo snapshots ## Все проверки разом
 	@echo "все проверки пройдены"
 
 check: test ## Полная проверка перед коммитом

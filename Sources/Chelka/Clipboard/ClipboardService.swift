@@ -221,11 +221,11 @@ final class ClipboardService: ObservableObject {
         case .transient:
             Log.clipboard.debug("пропущено: помечено как временное")
         case .concealed:
-            lastRejection = "Пропущено содержимое менеджера паролей"
+            lastRejection = T("clipboard.rejected.concealed", "Пропущено содержимое менеджера паролей")
         case .blacklisted(let bundleID):
-            lastRejection = "\(appName(for: bundleID)) в чёрном списке"
+            lastRejection = String(format: T("clipboard.rejected.blacklisted", "%@ в чёрном списке"), appName(for: bundleID))
         case .tooLarge(let size):
-            lastRejection = "Слишком большая запись — \(PasteboardReader.formatBytes(size))"
+            lastRejection = String(format: T("clipboard.rejected.tooLarge", "Слишком большая запись — %@"), PasteboardReader.formatBytes(size))
         }
     }
 
@@ -266,7 +266,7 @@ final class ClipboardService: ObservableObject {
             persistEviction(evicted)
         } else {
             guard history.pin(id: id) else {
-                lastRejection = "Закреплено максимум — \(ClipboardHistory.pinnedLimit)"
+                lastRejection = String(format: T("clipboard.pinLimit", "Закреплено максимум — %d"), ClipboardHistory.pinnedLimit)
                 return
             }
         }

@@ -12,7 +12,7 @@ struct MusicCard: View {
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        Card(title: "Музыка", systemImage: "music.note", stage: nil) {
+        Card(title: T("card.music", "Музыка"), systemImage: "music.note", stage: nil) {
             HStack(spacing: 10) {
                 artwork
 
@@ -60,11 +60,11 @@ struct MusicCard: View {
     private var placeholderTitle: String {
         switch service.status {
         case .automationDenied(let source):
-            return "Нет доступа к \(source.displayName)"
+            return String(format: T("music.denied", "Нет доступа к %@"), source.displayName)
         case .noSupportedPlayer:
-            return "Ничего не играет"
+            return T("music.nothing", "Ничего не играет")
         default:
-            return "Ничего не играет"
+            return T("music.nothing", "Ничего не играет")
         }
     }
 
@@ -94,11 +94,11 @@ struct MusicCard: View {
     private var hintText: String {
         switch service.status {
         case .automationDenied:
-            return "Разреши управление в Настройках → Конфиденциальность"
+            return T("music.denied.hint", "Разреши управление в Настройках → Конфиденциальность")
         case .noSupportedPlayer where !MediaKeys.isAuthorized:
-            return "Кнопки работают с Music и Spotify"
+            return T("music.keys.hint", "Кнопки работают с Music и Spotify")
         default:
-            return "Music · Spotify"
+            return T("music.sources", "Music · Spotify")
         }
     }
 

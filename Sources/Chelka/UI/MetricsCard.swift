@@ -6,7 +6,7 @@ struct MetricsCard: View {
     @ObservedObject var service: MetricsService
 
     var body: some View {
-        Card(title: "Система", systemImage: "gauge.medium", stage: nil) {
+        Card(title: T("card.system", "Система"), systemImage: "gauge.medium", stage: nil) {
             HStack(spacing: 8) {
                 MetricGauge(
                     label: "CPU",
@@ -59,7 +59,7 @@ struct MetricsCard: View {
     }
 
     private var temperatureLabel: String {
-        service.snapshot.temperatureCelsius == nil ? "Нагрев" : "°C"
+        service.snapshot.temperatureCelsius == nil ? T("metrics.heat", "Нагрев") : "°C"
     }
 
     /// Без градусов показываем публичный уровень теплового давления:

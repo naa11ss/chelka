@@ -164,10 +164,10 @@ public enum ThermalPressure: String, Sendable, Equatable {
 
     public var localizedTitle: String {
         switch self {
-        case .nominal: return "норма"
-        case .fair: return "тепло"
-        case .serious: return "жарко"
-        case .critical: return "перегрев"
+        case .nominal: return T("thermal.nominal", "норма")
+        case .fair: return T("thermal.fair", "тепло")
+        case .serious: return T("thermal.serious", "жарко")
+        case .critical: return T("thermal.critical", "перегрев")
         }
     }
 }

@@ -8,11 +8,17 @@ final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
     private let theme: ThemeController
     private let onToggleNotch: () -> Void
+    private let onOpenSettings: () -> Void
     private var cancellables = Set<AnyCancellable>()
 
-    init(theme: ThemeController, onToggleNotch: @escaping () -> Void) {
+    init(
+        theme: ThemeController,
+        onToggleNotch: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void
+    ) {
         self.theme = theme
         self.onToggleNotch = onToggleNotch
+        self.onOpenSettings = onOpenSettings
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -39,17 +45,25 @@ final class StatusItemController: NSObject {
         let menu = NSMenu()
 
         let toggle = NSMenuItem(
-            title: String(localized: "menu.toggle", defaultValue: "Показать виджет"),
+            title: T("menu.toggle", "Показать виджет"),
             action: #selector(toggleNotch),
             keyEquivalent: ""
         )
         toggle.target = self
         menu.addItem(toggle)
 
+        let settings = NSMenuItem(
+            title: T("menu.settings", "Настройки…"),
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        settings.target = self
+        menu.addItem(settings)
+
         menu.addItem(.separator())
 
         let themeItem = NSMenuItem(
-            title: String(localized: "menu.theme", defaultValue: "Тема"),
+            title: T("menu.theme", "Тема"),
             action: nil,
             keyEquivalent: ""
         )
@@ -71,7 +85,7 @@ final class StatusItemController: NSObject {
         menu.addItem(version)
 
         let quit = NSMenuItem(
-            title: String(localized: "menu.quit", defaultValue: "Выйти"),
+            title: T("menu.quit", "Выйти"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -82,6 +96,10 @@ final class StatusItemController: NSObject {
 
     @objc private func toggleNotch() {
         onToggleNotch()
+    }
+
+    @objc private func openSettings() {
+        onOpenSettings()
     }
 
     @objc private func selectTheme(_ sender: NSMenuItem) {

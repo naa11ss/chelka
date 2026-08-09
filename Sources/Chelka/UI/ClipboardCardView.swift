@@ -108,12 +108,12 @@ struct ClipboardCardView: View {
                 Button(action: onTogglePin) {
                     Image(systemName: item.isPinned ? "pin.slash.fill" : "pin.fill")
                 }
-                .help(item.isPinned ? "Открепить" : "Закрепить")
+                .help(item.isPinned ? T("clipboard.unpin", "Открепить") : T("clipboard.pin", "Закрепить"))
 
                 Button(action: onRemove) {
                     Image(systemName: "trash.fill")
                 }
-                .help("Удалить")
+                .help(T("clipboard.delete", "Удалить"))
 
                 Spacer(minLength: 0)
             } else {
@@ -172,7 +172,7 @@ struct ClipboardCardView: View {
             RoundedRectangle(cornerRadius: DS.cardRadius, style: .continuous)
                 .fill(.black.opacity(0.55))
                 .overlay {
-                    Label("Скопировано", systemImage: "checkmark.circle.fill")
+                    Label(T("clipboard.copied", "Скопировано"), systemImage: "checkmark.circle.fill")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.white)
                 }
@@ -183,7 +183,7 @@ struct ClipboardCardView: View {
     private var tooltip: String {
         var parts = [item.preview]
         if let subtitle = item.subtitle { parts.append(subtitle) }
-        parts.append("Клик — в буфер · Перетащи, чтобы вынести")
+        parts.append(T("clipboard.tooltip", "Клик — в буфер · Перетащи, чтобы вынести"))
         return parts.joined(separator: "\n")
     }
 }

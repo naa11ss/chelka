@@ -25,7 +25,7 @@ struct ClipboardPane: View {
         HStack(spacing: 6) {
             Image(systemName: "doc.on.clipboard")
                 .font(.system(size: 10, weight: .semibold))
-            Text("Буфер")
+            Text(T("card.clipboard", "Буфер"))
                 .font(.system(size: 10, weight: .semibold))
                 .textCase(.uppercase)
 
@@ -37,7 +37,7 @@ struct ClipboardPane: View {
                     .foregroundStyle(Color.notchTertiary)
                     .lineLimit(1)
             } else if case .memoryOnly = service.persistence {
-                Label("только в памяти", systemImage: "exclamationmark.triangle")
+                Label(T("clipboard.memoryOnly", "только в памяти"), systemImage: "exclamationmark.triangle")
                     .font(.system(size: 9))
                     .foregroundStyle(.orange)
             } else {
@@ -53,7 +53,7 @@ struct ClipboardPane: View {
         let pinned = service.history.pinned.count
         let regular = service.history.regular.count
         return pinned > 0
-            ? "\(regular)/\(ClipboardHistory.regularLimit) · \(pinned) закр."
+            ? "\(regular)/\(ClipboardHistory.regularLimit) · \(pinned) \(T("clipboard.pinnedShort", "закр."))"
             : "\(regular)/\(ClipboardHistory.regularLimit)"
     }
 
@@ -64,7 +64,7 @@ struct ClipboardPane: View {
                 VStack(spacing: 4) {
                     Image(systemName: "doc.on.clipboard")
                         .font(.system(size: 14))
-                    Text("Скопируй что-нибудь — появится здесь")
+                    Text(T("clipboard.empty", "Скопируй что-нибудь — появится здесь"))
                         .font(.system(size: 10))
                 }
                 .foregroundStyle(Color.notchTertiary)

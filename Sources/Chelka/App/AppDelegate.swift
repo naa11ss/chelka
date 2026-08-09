@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var metricsService: MetricsService!
     private var musicService: MusicService!
     private var notchController: NotchController!
+    private var permissionsService: PermissionsService!
+    private var settingsWindow: SettingsWindowController!
     private var statusItemController: StatusItemController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -22,9 +24,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             metrics: metricsService,
             music: musicService
         )
+        permissionsService = PermissionsService(clipboard: clipboardService, music: musicService)
+        settingsWindow = SettingsWindowController(
+            theme: themeController,
+            clipboard: clipboardService,
+            permissions: permissionsService
+        )
         statusItemController = StatusItemController(
             theme: themeController,
-            onToggleNotch: { [weak self] in self?.notchController.toggleFromMenu() }
+            onToggleNotch: { [weak self] in self?.notchController.toggleFromMenu() },
+            onOpenSettings: { [weak self] in self?.settingsWindow.show() }
         )
 
         clipboardService.start()
@@ -51,6 +60,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("--metrics-demo", 0.3, { [weak self] in MetricsDemo.run(service: self!.metricsService) }),
             ("--clipboard-demo", 1.2, { [weak self] in ClipboardDemo.run(service: self!.clipboardService) }),
             ("--hover-demo", 0.3, { [weak self] in HoverDemo.run(controller: self!.notchController) }),
+            ("--settings-demo", 0.3, { [weak self] in
+                guard let self else { return }
+                SettingsDemo.run(
+                    window: self.settingsWindow,
+                    theme: self.themeController,
+                    clipboard: self.clipboardService,
+                    permissions: self.permissionsService
+                )
+            }),
         ]
 
         for demo in demos where CommandLine.arguments.contains(demo.flag) {
