@@ -197,6 +197,9 @@ final class NotchController {
         self.contentView = container
         self.hostingView = hosting
 
+        // До первого движения мыши окно не должно перехватывать ничего.
+        panel.ignoresMouseEvents = true
+
         applyLayoutToPanel()
         panel.orderFrontRegardless()
     }
@@ -220,6 +223,34 @@ final class NotchController {
             ? layout.expandedRectInView.union(layout.hoverRectInView)
             : layout.hoverRectInView
         contentView.interactiveRect = rect
+        updateMousePassThrough(for: cursorProvider())
+    }
+
+    /// Пропускает клики сквозь окно, когда курсор не над самим виджетом.
+    ///
+    /// Отсечь событие в `hitTest` вида недостаточно: окно всё равно считает
+    /// клик своим, и до приложения под ним он не доходит. Пока виджет свёрнут,
+    /// панель занимает 768×296 точек поверх всех окон — без этого в верхней
+    /// части экрана просто нельзя было ничего нажать.
+    private func updateMousePassThrough(for point: NSPoint) {
+        guard let panel else { return }
+
+        let shouldReceiveClicks = isCursorOverWidget(point)
+        if panel.ignoresMouseEvents == shouldReceiveClicks {
+            panel.ignoresMouseEvents = !shouldReceiveClicks
+        }
+    }
+
+    /// Курсор над видимым телом виджета, а не просто внутри окна-панели.
+    private func isCursorOverWidget(_ point: NSPoint) -> Bool {
+        switch stateMachine.state {
+        case .expanded:
+            return layout.expandedRectScreen.contains(point)
+        case .collapsed:
+            // Свёрнутый виджет на экране с вырезом не нарисован вовсе,
+            // на экране без выреза — кругляш, но и он открывается наведением.
+            return false
+        }
     }
 
     private func applyTheme() {
@@ -241,6 +272,9 @@ final class NotchController {
     /// Раскладка на текущем экране.
     var currentLayout: NotchLayout { layout }
 
+    /// Пропускает ли окно клики насквозь прямо сейчас.
+    var panelIgnoresMouseEvents: Bool { panel?.ignoresMouseEvents ?? true }
+
     private func handleMouseMoved(to point: NSPoint) {
         let inside = isCursorInside(point)
         let previous = stateMachine.state
@@ -248,6 +282,8 @@ final class NotchController {
 
         if next != previous {
             applyState(animated: true)
+        } else {
+            updateMousePassThrough(for: point)
         }
         syncPendingTimer()
     }

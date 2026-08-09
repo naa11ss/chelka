@@ -24,7 +24,10 @@ final class NotchPanel: NSPanel {
         hasShadow = false
         isMovable = false
         isMovableByWindowBackground = false
-        ignoresMouseEvents = false
+        // Перехват включается только когда курсор над телом виджета —
+        // иначе окно поверх всех остальных съедало бы клики в верхней
+        // части экрана, ничего при этом не показывая.
+        ignoresMouseEvents = true
         acceptsMouseMovedEvents = true
 
         isFloatingPanel = true
