@@ -16,6 +16,7 @@ final class MetricsService: ObservableObject {
     private var timer: Timer?
     private var previousTicks: CPUTicks?
     private let temperatureReader = TemperatureReader()
+    private let smcReader = SMCReader()
 
     /// Температура меняется медленно, а опрос стоит трёх десятков обращений
     /// к системе событий HID — читаем её через раз.
@@ -66,8 +67,12 @@ final class MetricsService: ObservableObject {
             previousTicks = ticks
         }
 
+        var fans: [FanSpeed] = []
         if tickCounter % Self.temperatureEveryNTicks == 0 {
             lastTemperature = SystemTemperature.representative(from: readTemperatures())
+            fans = readFans()
+        } else {
+            fans = snapshot.fans
         }
         tickCounter += 1
 
@@ -75,7 +80,8 @@ final class MetricsService: ObservableObject {
             cpuPercent: cpuPercent ?? snapshot.cpuPercent,
             memory: readMemory(),
             temperatureCelsius: lastTemperature,
-            thermalPressure: currentThermalPressure()
+            thermalPressure: currentThermalPressure(),
+            fans: fans
         )
     }
 
@@ -135,10 +141,23 @@ final class MetricsService: ObservableObject {
         )
     }
 
+    /// Apple Silicon отвечает через систему событий HID; на Intel этот путь
+    /// пуст, и в дело идёт SMC. Приложение не спрашивает архитектуру —
+    /// просто пробует оба и берёт то, что реально откликнулось. Так надёжнее:
+    /// если Apple завтра поменяет местами доступность путей на каком-то
+    /// поколении железа, код не нужно будет чинить отдельно.
     private func readTemperatures() -> [TemperatureReading] {
-        temperatureReader.readAll().map {
+        let hid = temperatureReader.readAll().map {
             TemperatureReading(name: $0.name, celsius: $0.celsius)
         }
+        if !hid.isEmpty { return hid }
+        return smcReader.readTemperatures()
+    }
+
+    /// Пусто на моделях без вентилятора (Air и часть Mac mini) —
+    /// карточка в интерфейсе просто не рисует блок оборотов.
+    private func readFans() -> [FanSpeed] {
+        smcReader.readFans().map { FanSpeed(index: $0.index, rpm: $0.rpm) }
     }
 
     /// Публичный запасной показатель: работает всегда, но без градусов.

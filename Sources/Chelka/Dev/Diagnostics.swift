@@ -40,12 +40,29 @@ enum Diagnostics {
 
     private static func printSensors() {
         print("")
-        let reader = TemperatureReader()
-        let sensors = reader.readAll().sorted { $0.name < $1.name }
+        let hidReader = TemperatureReader()
+        let hidSensors = hidReader.readAll().sorted { $0.name < $1.name }
 
-        print("Термодатчики: \(sensors.count)")
-        for sensor in sensors {
+        print("Термодатчики (HID, Apple Silicon): \(hidSensors.count)")
+        for sensor in hidSensors {
             print(String(format: "    %-34@ %6.2f °C", sensor.name as NSString, sensor.celsius))
+        }
+
+        let smc = SMCReader()
+        print("")
+        print("SMC сервис доступен: \(smc.isAvailable)")
+
+        let smcTemps = smc.readTemperatures()
+        print("Термодатчики (SMC, Intel): \(smcTemps.count)")
+        for sensor in smcTemps {
+            print(String(format: "    %-6@ %6.2f °C", sensor.name as NSString, sensor.celsius))
+        }
+
+        let fans = smc.readFans()
+        print("")
+        print("Вентиляторы: \(fans.isEmpty ? "нет (безвентиляторная модель либо ключи не опознаны)" : "\(fans.count)")")
+        for fan in fans {
+            print(String(format: "    вентилятор %d: %.0f об/мин", fan.index, fan.rpm))
         }
     }
 

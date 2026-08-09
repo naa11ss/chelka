@@ -7,32 +7,55 @@ struct MetricsCard: View {
 
     var body: some View {
         Card(title: T("card.system", "Система"), systemImage: "gauge.medium", stage: nil) {
-            HStack(spacing: 8) {
-                MetricGauge(
-                    label: "CPU",
-                    value: service.snapshot.cpuPercent,
-                    display: percent(service.snapshot.cpuPercent),
-                    fraction: fraction(service.snapshot.cpuPercent),
-                    tint: load(service.snapshot.cpuPercent)
-                )
+            VStack(spacing: 4) {
+                HStack(spacing: 8) {
+                    MetricGauge(
+                        label: "CPU",
+                        value: service.snapshot.cpuPercent,
+                        display: percent(service.snapshot.cpuPercent),
+                        fraction: fraction(service.snapshot.cpuPercent),
+                        tint: load(service.snapshot.cpuPercent)
+                    )
 
-                MetricGauge(
-                    label: "RAM",
-                    value: service.snapshot.memory?.usedPercent,
-                    display: percent(service.snapshot.memory?.usedPercent),
-                    fraction: fraction(service.snapshot.memory?.usedPercent),
-                    tint: load(service.snapshot.memory?.usedPercent)
-                )
+                    MetricGauge(
+                        label: "RAM",
+                        value: service.snapshot.memory?.usedPercent,
+                        display: percent(service.snapshot.memory?.usedPercent),
+                        fraction: fraction(service.snapshot.memory?.usedPercent),
+                        tint: load(service.snapshot.memory?.usedPercent)
+                    )
 
-                MetricGauge(
-                    label: temperatureLabel,
-                    value: service.snapshot.temperatureCelsius,
-                    display: temperatureDisplay,
-                    fraction: temperatureFraction,
-                    tint: temperatureTint
-                )
+                    MetricGauge(
+                        label: temperatureLabel,
+                        value: service.snapshot.temperatureCelsius,
+                        display: temperatureDisplay,
+                        fraction: temperatureFraction,
+                        tint: temperatureTint
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Пусто на моделях без вентилятора — строка просто не рисуется,
+                // карточка не оставляет под неё дыру.
+                if !service.snapshot.fans.isEmpty {
+                    fanRow
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var fanRow: some View {
+        HStack(spacing: 8) {
+            ForEach(service.snapshot.fans) { fan in
+                HStack(spacing: 3) {
+                    Image(systemName: "fan")
+                        .font(.system(size: 8))
+                    Text("\(Int(fan.rpm.rounded()))")
+                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                }
+                .foregroundStyle(Color.notchSecondary)
+            }
+            Spacer(minLength: 0)
         }
     }
 

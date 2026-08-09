@@ -132,6 +132,19 @@ public enum SystemTemperature {
     }
 }
 
+/// Обороты одного вентилятора.
+public struct FanSpeed: Sendable, Equatable, Identifiable {
+    public let index: Int
+    public let rpm: Double
+
+    public init(index: Int, rpm: Double) {
+        self.index = index
+        self.rpm = rpm
+    }
+
+    public var id: Int { index }
+}
+
 /// Все метрики разом — то, что показывает виджет.
 public struct SystemMetricsSnapshot: Sendable, Equatable {
     public let cpuPercent: Double?
@@ -140,17 +153,22 @@ public struct SystemMetricsSnapshot: Sendable, Equatable {
     /// Уровень теплового давления — публичный запасной вариант,
     /// когда градусы недоступны.
     public let thermalPressure: ThermalPressure
+    /// Пусто на моделях без вентилятора — это не «датчик не найден»,
+    /// а «здесь и не должно быть».
+    public let fans: [FanSpeed]
 
     public init(
         cpuPercent: Double? = nil,
         memory: MemorySample? = nil,
         temperatureCelsius: Double? = nil,
-        thermalPressure: ThermalPressure = .nominal
+        thermalPressure: ThermalPressure = .nominal,
+        fans: [FanSpeed] = []
     ) {
         self.cpuPercent = cpuPercent
         self.memory = memory
         self.temperatureCelsius = temperatureCelsius
         self.thermalPressure = thermalPressure
+        self.fans = fans
     }
 
     public static let empty = SystemMetricsSnapshot()
