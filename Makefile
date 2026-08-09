@@ -14,8 +14,15 @@ test: ## Прогнать тесты ядра
 identity: ## Создать постоянный сертификат подписи (один раз)
 	@bash scripts/make-identity.sh
 
-app: ## Собрать Chelka.app (release + подпись)
+app: ## Собрать Chelka.app (release, arm64 + x86_64, с подписью)
 	@bash scripts/build-app.sh
+
+dist: app ## Собрать архив для переноса на другой Mac
+	@rm -f build/Chelka.zip
+	@cd build && ditto -c -k --keepParent Chelka.app Chelka.zip
+	@echo "архив: build/Chelka.zip"
+	@echo "на другом Mac: распаковать, затем правая кнопка → Открыть"
+	@echo "(приложение подписано локальным сертификатом, обычный двойной клик его не пустит)"
 
 run: stop app ## Пересобрать и запустить
 	@open $(APP)

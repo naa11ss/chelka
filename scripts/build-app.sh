@@ -11,10 +11,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="${CONFIG:-release}"
 APP_NAME="Chelka"
 BUNDLE="$ROOT/build/$APP_NAME.app"
-BIN_PATH="$ROOT/.build/$CONFIG/$APP_NAME"
 
-echo "==> swift build -c $CONFIG"
-swift build --package-path "$ROOT" -c "$CONFIG"
+# Универсальный бинарник по умолчанию для release.
+#
+# Сборка только под arm64 на Intel-маке даёт «программа не поддерживается
+# этим компьютером Mac» — при том, что и система, и подпись в порядке.
+# Отладочные сборки собираем под текущую машину: вдвое быстрее.
+if [[ "${UNIVERSAL:-}" == "0" || "$CONFIG" != "release" ]]; then
+	echo "==> swift build -c $CONFIG (текущая архитектура)"
+	swift build --package-path "$ROOT" -c "$CONFIG"
+	BIN_PATH="$ROOT/.build/$CONFIG/$APP_NAME"
+else
+	echo "==> swift build -c $CONFIG (arm64 + x86_64)"
+	swift build --package-path "$ROOT" -c "$CONFIG" --arch arm64 --arch x86_64
+	BIN_PATH="$ROOT/.build/apple/Products/$(tr '[:lower:]' '[:upper:]' <<< "${CONFIG:0:1}")${CONFIG:1}/$APP_NAME"
+fi
 
 if [[ ! -x "$BIN_PATH" ]]; then
 	echo "!! бинарник не найден: $BIN_PATH" >&2
@@ -73,5 +84,7 @@ codesign --force --sign "$IDENTITY" --timestamp=none "$BUNDLE" >/dev/null
 
 echo "==> проверка подписи"
 codesign --verify --deep --strict "$BUNDLE"
+
+echo "==> архитектуры: $(lipo -archs "$BUNDLE/Contents/MacOS/$APP_NAME")"
 
 echo "готово: $BUNDLE"
