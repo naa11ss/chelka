@@ -10,6 +10,7 @@ struct NotchRootView: View {
     @ObservedObject var model: NotchViewModel
     @ObservedObject var clipboard: ClipboardService
     @ObservedObject var metrics: MetricsService
+    @ObservedObject var music: MusicService
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -60,7 +61,7 @@ struct NotchRootView: View {
             }
             .overlay {
                 if model.state == .expanded {
-                    ExpandedContentView(clipboard: clipboard, metrics: metrics)
+                    ExpandedContentView(clipboard: clipboard, metrics: metrics, music: music)
                         .padding(.horizontal, DS.flare + DS.contentPadding)
                         // Верхнюю полосу занимает сам вырез (или меню-бар):
                         // содержимое под ней физически не видно.

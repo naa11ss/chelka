@@ -43,11 +43,18 @@ final class NotchController {
 
     private let clipboard: ClipboardService
     private let metrics: MetricsService
+    private let music: MusicService
 
-    init(theme: ThemeController, clipboard: ClipboardService, metrics: MetricsService) {
+    init(
+        theme: ThemeController,
+        clipboard: ClipboardService,
+        metrics: MetricsService,
+        music: MusicService
+    ) {
         self.theme = theme
         self.clipboard = clipboard
         self.metrics = metrics
+        self.music = music
         let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
         self.layout = NotchGeometry.layout(for: metrics)
         self.viewModel = NotchViewModel(layout: layout)
@@ -82,6 +89,7 @@ final class NotchController {
 
     func stop() {
         metrics.stopSampling()
+        music.stopPolling()
         unregisterQuickPickHotkeys()
         pinnedAutoCloseTimer?.invalidate()
         hoverMonitor.stop()
@@ -182,7 +190,7 @@ final class NotchController {
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
 
-        let root = NotchRootView(model: viewModel, clipboard: clipboard, metrics: metrics)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard, metrics: metrics, music: music)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -327,8 +335,10 @@ final class NotchController {
         // состоянии на них никто не смотрит, а батарею они едят.
         if stateMachine.state == .expanded {
             metrics.startSampling()
+            music.startPolling()
         } else {
             metrics.stopSampling()
+            music.stopPolling()
         }
 
         if animated {

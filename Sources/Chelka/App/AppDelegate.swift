@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var themeController: ThemeController!
     private var clipboardService: ClipboardService!
     private var metricsService: MetricsService!
+    private var musicService: MusicService!
     private var notchController: NotchController!
     private var statusItemController: StatusItemController!
 
@@ -14,10 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themeController = ThemeController()
         clipboardService = ClipboardService()
         metricsService = MetricsService()
+        musicService = MusicService()
         notchController = NotchController(
             theme: themeController,
             clipboard: clipboardService,
-            metrics: metricsService
+            metrics: metricsService,
+            music: musicService
         )
         statusItemController = StatusItemController(
             theme: themeController,
@@ -25,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         clipboardService.start()
+        musicService.start()
         notchController.start()
 
         // ⌥⌘V открывает виджет на истории буфера.
@@ -32,28 +36,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.notchController.openPinned()
         }
 
-        if CommandLine.arguments.contains("--metrics-demo") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [metricsService] in
-                MetricsDemo.run(service: metricsService!)
-            }
-        }
+        scheduleDemosIfRequested()
+    }
 
-        if CommandLine.arguments.contains("--clipboard-demo") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [clipboardService] in
-                ClipboardDemo.run(service: clipboardService!)
-            }
-        }
+    /// Запуск сценарных проверок.
+    ///
+    /// Именно таймером, а не блоком главной очереди: проверки крутят
+    /// вложенный цикл событий, ожидая результатов, а изнутри блока главной
+    /// очереди следующие блоки той же очереди выполниться не могут —
+    /// она занята текущим. Из обработчика таймера очередь свободна.
+    private func scheduleDemosIfRequested() {
+        let demos: [(flag: String, delay: TimeInterval, run: @MainActor () -> Void)] = [
+            ("--music-demo", 0.3, { [weak self] in MusicDemo.run(service: self!.musicService) }),
+            ("--metrics-demo", 0.3, { [weak self] in MetricsDemo.run(service: self!.metricsService) }),
+            ("--clipboard-demo", 1.2, { [weak self] in ClipboardDemo.run(service: self!.clipboardService) }),
+            ("--hover-demo", 0.3, { [weak self] in HoverDemo.run(controller: self!.notchController) }),
+        ]
 
-        if CommandLine.arguments.contains("--hover-demo") {
-            // Даём панели встать на место, потом прогоняем сценарий.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [notchController] in
-                HoverDemo.run(controller: notchController!)
+        for demo in demos where CommandLine.arguments.contains(demo.flag) {
+            Timer.scheduledTimer(withTimeInterval: demo.delay, repeats: false) { _ in
+                MainActor.assumeIsolated { demo.run() }
             }
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         clipboardService?.stop()
+        musicService?.stop()
         notchController?.stop()
         Log.app.info("Chelka завершается")
     }

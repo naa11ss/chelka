@@ -84,6 +84,7 @@ enum SnapshotTool {
     /// для каждого кадра незачем.
     private static let demoClipboard = ClipboardService.makeDemo()
     private static let demoMetrics = MetricsService()
+    private static let demoMusic = MusicService()
 
     private static func render(_ testCase: Case, to url: URL) -> Bool {
         let layout = NotchGeometry.layout(for: testCase.metrics)
@@ -92,7 +93,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model, clipboard: demoClipboard, metrics: demoMetrics)
+            NotchRootView(model: model, clipboard: demoClipboard, metrics: demoMetrics, music: demoMusic)
         }
 
         let hosting = NSHostingView(rootView: root)

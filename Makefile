@@ -36,7 +36,10 @@ clipboard-demo: build stop ## Сквозная проверка буфера н�
 metrics-demo: build stop ## Проверка метрик на живой машине
 	@.build/debug/Chelka --metrics-demo
 
-verify: test hover-demo clipboard-demo metrics-demo snapshots ## Все проверки разом
+music-demo: build stop ## Проверка музыкального модуля (плееры не запускает)
+	@.build/debug/Chelka --music-demo
+
+verify: test hover-demo clipboard-demo metrics-demo music-demo snapshots ## Все проверки разом
 	@echo "все проверки пройдены"
 
 check: test ## Полная проверка перед коммитом

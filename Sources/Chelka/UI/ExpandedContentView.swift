@@ -9,11 +9,12 @@ import ChelkaCore
 struct ExpandedContentView: View {
     @ObservedObject var clipboard: ClipboardService
     @ObservedObject var metrics: MetricsService
+    @ObservedObject var music: MusicService
 
     var body: some View {
         VStack(spacing: DS.cardSpacing) {
             HStack(spacing: DS.cardSpacing) {
-                MusicPlaceholder()
+                MusicCard(service: music)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 MetricsCard(service: metrics)
@@ -73,41 +74,4 @@ struct Card<Content: View>: View {
     }
 }
 
-// MARK: - Заглушки следующих этапов
-
-private struct MusicPlaceholder: View {
-    var body: some View {
-        Card(title: "Музыка", systemImage: "music.note", stage: "этап 4") {
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.notchCard)
-                    .overlay {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.notchTertiary)
-                    }
-                    .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Ничего не играет")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.notchPrimary)
-                    Text("Music · Spotify")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Color.notchSecondary)
-
-                    HStack(spacing: 12) {
-                        ForEach(["backward.fill", "play.fill", "forward.fill"], id: \.self) { symbol in
-                            Image(systemName: symbol)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.notchTertiary)
-                        }
-                    }
-                    .padding(.top, 1)
-                }
-                Spacer(minLength: 0)
-            }
-        }
-    }
-}
 
