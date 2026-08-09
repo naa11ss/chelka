@@ -57,7 +57,7 @@ enum SettingsDemo {
 
         // Разрешения перечислены и у каждого есть объяснение.
         permissions.refresh()
-        check("разрешения перечислены", permissions.items.count == 4,
+        check("разрешения перечислены", permissions.items.count == 5,
               detail: "\(permissions.items.count)")
         check("у каждого разрешения есть объяснение и цена отказа",
               permissions.items.allSatisfy { !$0.explanation.isEmpty && !$0.cost.isEmpty })
