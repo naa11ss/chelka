@@ -36,16 +36,34 @@ struct ClipboardCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // Клик и перетаскивание — только на области содержимого, не
+                // на всей карточке: раньше `.onTapGesture`/`.onDrag` сидели
+                // на VStack целиком, то есть родителем над кнопками "закрепить"/
+                // "удалить" в подвале — и, судя по всему, забирали клик себе
+                // раньше, чем он доходил до самих кнопок (сама кнопка ничего
+                // не получала). Здесь эта неоднозначность в принципе не
+                // возникает: у подвала нет ни одного жеста-конкурента рядом
+                // с его собственными Button.
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // SwiftUI не передаёт модификаторы в TapGesture напрямую —
+                    // читаем их из текущего состояния клавиатуры в момент
+                    // клика, тот же приём, которым это решается на macOS
+                    // повсеместно.
+                    if NSEvent.modifierFlags.contains(.command) {
+                        onToggleSelect()
+                    } else {
+                        onCopy()
+                    }
+                }
+                .onDrag(itemProvider)
                 .overlay {
-                    // Только над содержимым, не над подвалом: подвал несёт
-                    // кнопки закрепления/удаления, а этот оверлей перехватывает
-                    // все клики в своих границах — покрывая всю карточку
-                    // целиком, он молча глушил бы эти кнопки, стоило записи
-                    // попасть в выбор из двух и более. Активен он только
-                    // пока эта карточка — часть такого выбора: для одиночных
-                    // карточек (обычный случай) в дереве видов его вообще
-                    // нет, они остаются на уже проверенном пути
-                    // `.onTapGesture`/`.onDrag` ниже.
+                    // Только над содержимым, не над подвалом — та же причина,
+                    // что и выше: покрывая всю карточку целиком, этот оверлей
+                    // молча глушил бы кнопки подвала, стоило записи попасть
+                    // в выбор из двух и более. Активен он только пока эта
+                    // карточка — часть такого выбора: для одиночных карточек
+                    // (обычный случай) в дереве видов его вообще нет.
                     if isMultiSelected {
                         BatchDragOverlay(
                             onClick: onCopy,
@@ -63,21 +81,13 @@ struct ClipboardCardView: View {
         .background(background)
         .overlay(alignment: .topTrailing) { badges }
         .overlay { copiedOverlay }
+        // Отдельно от того `.contentShape` над содержимым: этот — только
+        // для наведения, чтобы кнопки подвала показывались/прятались по
+        // всей карточке целиком, а не только над её верхней частью.
         .contentShape(RoundedRectangle(cornerRadius: DS.cardRadius, style: .continuous))
         .onHover { hovering in
             withAnimation(NotchAnimation.content) { isHovered = hovering }
         }
-        .onTapGesture {
-            // SwiftUI не передаёт модификаторы в TapGesture напрямую —
-            // читаем их из текущего состояния клавиатуры в момент клика,
-            // тот же приём, которым это решается на macOS повсеместно.
-            if NSEvent.modifierFlags.contains(.command) {
-                onToggleSelect()
-            } else {
-                onCopy()
-            }
-        }
-        .onDrag(itemProvider)
     }
 
     // MARK: - Содержимое
