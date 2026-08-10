@@ -12,6 +12,19 @@ import ChelkaCore
 final class NotchController {
     private let theme: ThemeController
     private let hoverMonitor = HoverMonitor()
+    private var mouseButtonMonitor: Any?
+
+    /// Пока зажата кнопка мыши — окно, поймавшее `mouseDown`, обязано
+    /// доиграть жест до `mouseUp`, что бы курсор ни делал в промежутке.
+    /// Без этого флага перетаскивание тонкого регулятора вентилятора
+    /// (5pt высотой) обрывалось на первом же вертикальном дрожании:
+    /// `updateMousePassThrough` реагирует на каждый `leftMouseDragged` —
+    /// см. `HoverMonitor` — и выставляет `ignoresMouseEvents = true`,
+    /// как только точка на миллиметр выходит за `expandedRectScreen`,
+    /// а SwiftUI `DragGesture` после этого просто не получает продолжения:
+    /// клик (без промежуточных `leftMouseDragged`) эту цепочку не задевает
+    /// и поэтому всегда работал, а протяжка — нет.
+    private var isMouseButtonDown = false
 
     private var stateMachine = HoverStateMachine()
     private var viewModel: NotchViewModel
@@ -77,6 +90,25 @@ final class NotchController {
         }
         hoverMonitor.start()
 
+        // Локальный монитор: если панель получила mouseDown, она уже
+        // приняла решение принимать события — держим его до mouseUp
+        // независимо от того, что покажет курсор в промежутке.
+        mouseButtonMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp]
+        ) { [weak self] event in
+            guard let self else { return event }
+            switch event.type {
+            case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+                self.isMouseButtonDown = true
+            case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+                self.isMouseButtonDown = false
+                self.updateMousePassThrough(for: self.cursorProvider())
+            default:
+                break
+            }
+            return event
+        }
+
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.scheduleScreenRebuild() }
             .store(in: &cancellables)
@@ -99,6 +131,10 @@ final class NotchController {
         unregisterQuickPickHotkeys()
         pinnedAutoCloseTimer?.invalidate()
         hoverMonitor.stop()
+        if let mouseButtonMonitor {
+            NSEvent.removeMonitor(mouseButtonMonitor)
+            self.mouseButtonMonitor = nil
+        }
         pendingTimer?.invalidate()
         pendingTimer = nil
         screenChangeDebounce?.cancel()
@@ -250,6 +286,11 @@ final class NotchController {
         guard let panel else { return }
 
         let shouldReceiveClicks = isCursorOverWidget(point)
+        // Начинать пропускать клики посреди зажатой кнопки нельзя — это
+        // и есть тот обрыв протяжки, см. комментарий у `isMouseButtonDown`.
+        // Разрешить событиям снова доходить до окна — можно всегда,
+        // опасна только противоположная сторона переключателя.
+        if isMouseButtonDown && !shouldReceiveClicks { return }
         if panel.ignoresMouseEvents == shouldReceiveClicks {
             panel.ignoresMouseEvents = !shouldReceiveClicks
         }
