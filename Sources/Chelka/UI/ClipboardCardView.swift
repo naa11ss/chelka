@@ -104,23 +104,34 @@ struct ClipboardCardView: View {
         }
     }
 
+    /// Скриншот с сильно вытянутым соотношением сторон (например, 1:5 —
+    /// узкая длинная лента) со старым `.aspectRatio(contentMode: .fill)`
+    /// растягивался далеко за пределы карточки: implicit-sizing у этого
+    /// модификатора рассчитан на разумные пропорции, а на резко skewed
+    /// соотношении давал сбой, и картинка рисовалась почти в исходном
+    /// размере вместо уменьшенного превью. `GeometryReader` — явные числа
+    /// вместо implicit-предложений: `.frame(width:height:)` до `.clipped()`
+    /// не оставляет самому SwiftUI решать, как трактовать пропорции.
     private var imageContent: some View {
-        Group {
-            if let thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.notchCard)
-                    .overlay {
-                        Image(systemName: "photo")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.notchTertiary)
-                    }
+        GeometryReader { geometry in
+            Group {
+                if let thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                } else {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.notchCard)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.notchTertiary)
+                        }
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
