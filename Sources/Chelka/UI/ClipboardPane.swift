@@ -85,10 +85,18 @@ struct ClipboardPane: View {
                         index: index,
                         thumbnail: service.thumbnail(for: item.id),
                         isCopied: justCopied == item.id,
+                        isSelected: service.selectedIDs.contains(item.id),
+                        isMultiSelected: service.selectedIDs.contains(item.id) && service.selectedIDs.count > 1,
                         onCopy: { copy(item) },
+                        onToggleSelect: { service.toggleSelection(id: item.id) },
                         onTogglePin: { service.togglePin(id: item.id) },
                         onRemove: { service.remove(id: item.id) },
-                        itemProvider: { provider(for: item) }
+                        itemProvider: { provider(for: item) },
+                        allSelectedEntries: {
+                            service.selectedIDs
+                                .compactMap { service.history.item(id: $0) }
+                                .map { dragEntry(for: $0) }
+                        }
                     )
                 }
             }
@@ -183,6 +191,53 @@ struct ClipboardPane: View {
         }
 
         return provider
+    }
+
+    /// То же, что `provider(for:)`, но для пакетного перетаскивания сразу
+    /// нескольких выбранных записей — `NSFilePromiseProvider` вместо
+    /// `NSItemProvider`, см. `ClipboardCardView.BatchDragEntry`.
+    private func dragEntry(for item: ClipboardItem) -> BatchDragEntry {
+        let service = self.service
+
+        switch item.kind {
+        case .text:
+            return BatchDragEntry(
+                filename: textDragFilename(for: item),
+                uti: UTType.utf8PlainText.identifier,
+                loadData: {
+                    guard case .text(let string)? = await service.payload(for: item.id) else { return nil }
+                    return Data(string.utf8)
+                }
+            )
+
+        case .image:
+            return BatchDragEntry(
+                filename: suggestedImageName(for: item),
+                uti: item.uti ?? UTType.png.identifier,
+                loadData: {
+                    guard case .image(let data, _)? = await service.payload(for: item.id) else { return nil }
+                    return data
+                }
+            )
+
+        case .file:
+            let ext = (item.preview as NSString).pathExtension
+            let uti = ext.isEmpty ? UTType.data.identifier : (UTType(filenameExtension: ext)?.identifier ?? UTType.data.identifier)
+            return BatchDragEntry(
+                filename: item.preview,
+                uti: uti,
+                loadData: {
+                    guard case .files(let urls)? = await service.payload(for: item.id), let first = urls.first else { return nil }
+                    return try? Data(contentsOf: first)
+                }
+            )
+        }
+    }
+
+    private func textDragFilename(for item: ClipboardItem) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        return "Chelka \(formatter.string(from: item.createdAt)).txt"
     }
 
     private func suggestedImageName(for item: ClipboardItem) -> String {

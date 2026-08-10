@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SwiftUI
 import ChelkaCore
@@ -148,6 +149,16 @@ final class NotchController {
             .sink { [weak self] _ in self?.rebuildForSizeChange() }
             .store(in: &cancellables)
 
+        clipboard.$selectedIDs
+            .receive(on: RunLoop.main)
+            .sink { [weak self] ids in self?.updateSelectionHotkeys(hasSelection: !ids.isEmpty) }
+            .store(in: &cancellables)
+
+        clipboard.$canUndo
+            .receive(on: RunLoop.main)
+            .sink { [weak self] canUndo in self?.updateUndoHotkey(canUndo: canUndo) }
+            .store(in: &cancellables)
+
         // Курсор может уже стоять на вырезе к моменту запуска — событий движения
         // тогда не будет, и виджет остался бы свёрнутым до первого шевеления мышью.
         handleMouseMoved(to: cursorProvider())
@@ -159,6 +170,8 @@ final class NotchController {
         metrics.stopSampling()
         music.stopPolling()
         unregisterQuickPickHotkeys()
+        unregisterSelectionHotkeys()
+        updateUndoHotkey(canUndo: false)
         pinnedAutoCloseTimer?.invalidate()
         hoverMonitor.stop()
         if let mouseButtonMonitor {
@@ -234,6 +247,54 @@ final class NotchController {
     private func unregisterQuickPickHotkeys() {
         for id in quickPickHotkeys { HotkeyCenter.shared.unregister(id) }
         quickPickHotkeys.removeAll()
+    }
+
+    // MARK: - Пакетное удаление и отмена (Cmd+клик по записям буфера)
+
+    /// Delete/⌫ глобально перехватывают клавишу, которую использует весь
+    /// остальной интерфейс системы — риск настоящий (клик мимо виджета,
+    /// Delete в Finder попадёт сюда, если выбор не сброшен), поэтому
+    /// регистрация живёт ровно пока выбор не пуст, а не постоянно, и
+    /// `applyState` сбрасывает выбор сразу при сворачивании виджета —
+    /// та же страховка, ради которой просили Cmd+Z с отложенным удалением.
+    private var selectionHotkeys: [UInt32] = []
+    private var undoHotkeyID: UInt32?
+
+    private func updateSelectionHotkeys(hasSelection: Bool) {
+        guard hasSelection != !selectionHotkeys.isEmpty else { return }
+        if hasSelection {
+            let bindings = [
+                HotkeyCenter.Binding(keyCode: UInt32(kVK_Delete), modifiers: 0),
+                HotkeyCenter.Binding(keyCode: UInt32(kVK_ForwardDelete), modifiers: 0),
+            ]
+            for binding in bindings {
+                if let id = HotkeyCenter.shared.register(binding, action: { [weak self] in
+                    self?.clipboard.removeSelected()
+                }) {
+                    selectionHotkeys.append(id)
+                }
+            }
+        } else {
+            unregisterSelectionHotkeys()
+        }
+    }
+
+    private func unregisterSelectionHotkeys() {
+        for id in selectionHotkeys { HotkeyCenter.shared.unregister(id) }
+        selectionHotkeys.removeAll()
+    }
+
+    private func updateUndoHotkey(canUndo: Bool) {
+        guard canUndo != (undoHotkeyID != nil) else { return }
+        if canUndo {
+            let binding = HotkeyCenter.Binding(keyCode: UInt32(kVK_ANSI_Z), modifiers: UInt32(cmdKey))
+            undoHotkeyID = HotkeyCenter.shared.register(binding) { [weak self] in
+                self?.clipboard.undoLastDeletion()
+            }
+        } else if let id = undoHotkeyID {
+            HotkeyCenter.shared.unregister(id)
+            undoHotkeyID = nil
+        }
     }
 
     private func pickItem(at index: Int) {
@@ -475,6 +536,10 @@ final class NotchController {
         } else {
             metrics.stopSampling()
             music.stopPolling()
+            // Выбор записей не должен пережить сворачивание — иначе Delete/⌫
+            // и Cmd+Z остаются глобально перехваченными для виджета, который
+            // пользователь уже не видит и не собирался трогать.
+            clipboard.clearSelection()
         }
 
         if animated {

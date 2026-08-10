@@ -22,6 +22,21 @@ final class ClipboardService: ObservableObject {
     @Published private(set) var persistence: Persistence = .onDisk
     @Published private(set) var lastRejection: String?
 
+    /// Записи, выбранные Cmd+кликом — для пакетного удаления и перетаскивания.
+    @Published private(set) var selectedIDs: Set<UUID> = []
+    /// Есть ли что вернуть после `removeSelected()`.
+    @Published private(set) var canUndo = false
+
+    /// Последнее пакетное удаление — живёт `undoRetention`, потом стирается
+    /// сам собой. Один слот, не стек: второе удаление подряд заменяет первое,
+    /// как и обычный Cmd+Z в большинстве приложений отменяет только последнее.
+    private struct PendingDeletion {
+        let items: [(item: ClipboardItem, payload: ClipboardPayload?)]
+    }
+    private var pendingDeletion: PendingDeletion?
+    private var undoExpiryTimer: Timer?
+    private static let undoRetention: TimeInterval = 600
+
     let settings: ClipboardSettings
 
     private let monitor = PasteboardMonitor()
@@ -312,6 +327,91 @@ final class ClipboardService: ObservableObject {
         enqueueWrite { store in
             try? await store.deleteAll(keepPinned: keepPinned)
         }
+    }
+
+    // MARK: - Выбор нескольких записей
+
+    /// Cmd+клик переключает запись во/из выбора, не копируя её —
+    /// обычный клик без Cmd продолжает копировать, как и раньше.
+    func toggleSelection(id: UUID) {
+        guard history.item(id: id) != nil else { return }
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
+    }
+
+    func clearSelection() {
+        selectedIDs.removeAll()
+    }
+
+    /// Удаляет весь выбор разом. Нагрузка каждой записи читается ДО удаления —
+    /// запись самого удаления и чтение нагрузки на восстановление идут через
+    /// одну и ту же очередь диска, и если удаление обгонит чтение,
+    /// восстанавливать после отмены будет нечего.
+    func removeSelected() {
+        let ids = Array(selectedIDs)
+        guard !ids.isEmpty else { return }
+        selectedIDs.removeAll()
+
+        Task {
+            var captured: [(item: ClipboardItem, payload: ClipboardPayload?)] = []
+            for id in ids {
+                guard let item = history.item(id: id) else { continue }
+                captured.append((item, await payload(for: id)))
+            }
+            guard !captured.isEmpty else { return }
+
+            for entry in captured { _ = history.remove(id: entry.item.id) }
+            for entry in captured {
+                thumbnails[entry.item.id] = nil
+                memoryPayloads[entry.item.id] = nil
+            }
+
+            let removedIDs = captured.map(\.item.id)
+            enqueueWrite { store in
+                try? await store.delete(ids: removedIDs)
+            }
+
+            pendingDeletion = PendingDeletion(items: captured)
+            canUndo = true
+            scheduleUndoExpiry()
+        }
+    }
+
+    /// Возвращает последнее пакетное удаление, пока оно не истекло
+    /// (`undoRetention`) и не было заменено следующим удалением.
+    func undoLastDeletion() {
+        guard let pending = pendingDeletion else { return }
+        pendingDeletion = nil
+        canUndo = false
+        undoExpiryTimer?.invalidate()
+        undoExpiryTimer = nil
+
+        for entry in pending.items {
+            let outcome = history.insert(entry.item)
+            guard case .inserted(let evicted) = outcome else { continue }
+
+            guard let payload = entry.payload else {
+                Log.clipboard.error("восстановление без нагрузки: \(entry.item.id, privacy: .public)")
+                continue
+            }
+            memoryPayloads[entry.item.id] = payload
+            persistInsert(item: entry.item, payload: payload, evicted: evicted)
+        }
+    }
+
+    private func scheduleUndoExpiry() {
+        undoExpiryTimer?.invalidate()
+        let timer = Timer(timeInterval: Self.undoRetention, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.pendingDeletion = nil
+                self?.canUndo = false
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        undoExpiryTimer = timer
     }
 
     // MARK: - Доступ к данным
