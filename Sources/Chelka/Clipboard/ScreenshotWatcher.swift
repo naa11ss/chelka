@@ -14,9 +14,18 @@ final class ScreenshotWatcher {
     private var stream: FSEventStreamRef?
     private let queue = DispatchQueue(label: "com.ivan.chelka.screenshots")
     private var seenPaths: Set<String> = []
+    /// Кандидаты, для которых уже запланирована проверка готовности —
+    /// отдельно от `seenPaths`, чтобы файл, ещё дописывающийся на момент
+    /// первой проверки, не выпал из рассмотрения навсегда, а мог быть
+    /// подхвачен следующим событием FSEvents.
+    private var pendingPaths: Set<String> = []
     private var startedAt = Date()
 
     private(set) var directory: URL
+    /// `true`, если папку нужно каждый раз при `start()` брать заново из
+    /// настроек системы. `false` — папка передана явно через `init`
+    /// (например, тестами) и не должна быть тихо подменена.
+    private let usesSystemDirectory: Bool
 
     /// Расширения, которые считаем снимками. HEIC macOS не пишет,
     /// но пользователь мог поменять формат через `defaults write`.
@@ -26,6 +35,7 @@ final class ScreenshotWatcher {
     private static let freshnessWindow: TimeInterval = 8
 
     init(directory: URL? = nil) {
+        self.usesSystemDirectory = directory == nil
         self.directory = directory ?? Self.systemScreenshotDirectory
     }
 
@@ -45,7 +55,9 @@ final class ScreenshotWatcher {
     func start() {
         stop()
         startedAt = Date()
-        directory = Self.systemScreenshotDirectory
+        if usesSystemDirectory {
+            directory = Self.systemScreenshotDirectory
+        }
 
         // Всё, что уже лежит в папке, — не новости.
         seenPaths = Set(existingImageFiles().map(\.path))
@@ -101,22 +113,32 @@ final class ScreenshotWatcher {
     /// которых раньше не видели.
     private func handleEvents() {
         let candidates = existingImageFiles().filter { url in
-            guard !seenPaths.contains(url.path) else { return false }
+            guard !seenPaths.contains(url.path), !pendingPaths.contains(url.path) else { return false }
             guard let created = creationDate(of: url) else { return false }
             guard created >= startedAt.addingTimeInterval(-1) else { return false }
             return Date().timeIntervalSince(created) <= Self.freshnessWindow
         }
 
         guard !candidates.isEmpty else { return }
-        for url in candidates { seenPaths.insert(url.path) }
+        // Помечаем как "в проверке", не как "увиденное" — файл ещё может
+        // оказаться не дописанным, и тогда его нужно оставить кандидатом
+        // на следующее событие FSEvents, а не потерять навсегда.
+        for url in candidates { pendingPaths.insert(url.path) }
 
         // Снимок пишется не мгновенно: читать сразу по событию — рискуем
         // получить половину файла.
         queue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self else { return }
             let ready = candidates.filter { self.isReadable($0) }
-            guard !ready.isEmpty else { return }
+            let notReady = Set(candidates.map(\.path)).subtracting(ready.map(\.path))
 
+            for url in ready { self.pendingPaths.remove(url.path); self.seenPaths.insert(url.path) }
+            // Не готов — снимаем с "в проверке", чтобы следующее событие
+            // FSEvents (например, когда запись файла завершится) снова
+            // рассмотрело его как кандидата, вместо того чтобы забыть о нём.
+            for path in notReady { self.pendingPaths.remove(path) }
+
+            guard !ready.isEmpty else { return }
             DispatchQueue.main.async {
                 for url in ready {
                     Log.clipboard.info("новый снимок: \(url.lastPathComponent, privacy: .public)")

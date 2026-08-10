@@ -144,8 +144,21 @@ final class ClipboardService: ObservableObject {
     private func loadHistory(from store: ClipboardStore) async {
         do {
             let items = try await store.loadItems()
-            history = ClipboardHistory(items: items)
+            var loaded = ClipboardHistory(items: items)
+
+            // Пока шла асинхронная загрузка с диска, монитор мог успеть
+            // захватить и вставить в `history` что-то новое (оно уже
+            // сохранено на диск через отдельную цепочку записи) — без
+            // этого слияния слепая подмена ниже стёрла бы его из
+            // видимой истории до следующего перезапуска.
+            let loadedIDs = Set(items.map(\.id))
+            for capturedDuringLoad in history.items where !loadedIDs.contains(capturedDuringLoad.id) {
+                loaded.insert(capturedDuringLoad)
+            }
+
+            history = loaded
             Log.clipboard.info("история загружена: \(items.count) записей")
+            warmThumbnails()
         } catch {
             Log.clipboard.error("не удалось загрузить историю: \(String(describing: error), privacy: .public)")
         }
