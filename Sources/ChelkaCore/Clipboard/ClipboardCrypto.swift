@@ -1,4 +1,7 @@
-import CryptoKit
+// CryptoKit не размечен под Swift 6: `SymmetricKey` не Sendable, хотя
+// неизменяемый набор байт им и является — `@preconcurrency` доверяет
+// это компилятору вместо `@unchecked Sendable` на своём типе.
+@preconcurrency import CryptoKit
 import Foundation
 import Security
 

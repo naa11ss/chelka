@@ -116,12 +116,21 @@ struct MetricsCard: View {
 }
 
 /// Один показатель: число, подпись и полоска заполнения.
+///
+/// Первое появление настоящего значения (после `nil` — виджет только что
+/// раскрылся, замер ещё не подоспел) полоска сперва «разгоняет» до упора,
+/// как самопроверка тахометра при запуске машины, и только потом
+/// подстраивается под настоящую цифру — чисто декоративный штрих, чтобы
+/// открытие виджета не выглядело так, будто он молча ждёт данных.
 private struct MetricGauge: View {
     let label: String
     let value: Double?
     let display: String
     let fraction: Double
     let tint: Color
+
+    @State private var animatedFraction: Double = 0
+    @State private var hasPlayedIntro = false
 
     var body: some View {
         VStack(spacing: 4) {
@@ -131,6 +140,8 @@ private struct MetricGauge: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(height: 16)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.4), value: display)
 
             Capsule()
                 .fill(Color.notchStroke)
@@ -139,7 +150,7 @@ private struct MetricGauge: View {
                     GeometryReader { geometry in
                         Capsule()
                             .fill(tint)
-                            .frame(width: geometry.size.width * fraction)
+                            .frame(width: geometry.size.width * animatedFraction)
                     }
                 }
                 .clipShape(Capsule())
@@ -150,6 +161,20 @@ private struct MetricGauge: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
-        .animation(.easeOut(duration: 0.4), value: fraction)
+        .onAppear { updateAnimatedFraction() }
+        .onChange(of: value) { _, _ in updateAnimatedFraction() }
+    }
+
+    private func updateAnimatedFraction() {
+        guard value != nil else { return }
+        guard !hasPlayedIntro else {
+            withAnimation(.easeOut(duration: 0.4)) { animatedFraction = fraction }
+            return
+        }
+        hasPlayedIntro = true
+        withAnimation(.easeIn(duration: 0.35)) { animatedFraction = 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.easeOut(duration: 0.5)) { animatedFraction = fraction }
+        }
     }
 }
