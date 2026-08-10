@@ -47,6 +47,10 @@ public struct MemorySample: Sendable, Equatable {
     public let speculativePages: UInt64
     public let purgeablePages: UInt64
     public let externalPages: UInt64
+    /// Анонимная память — та, которую в отличие от `externalPages`
+    /// (файлового кэша) нельзя просто перечитать с диска. Именно она,
+    /// а не `activePages`, входит в формулу занятой памяти — см. `usedBytes`.
+    public let internalPages: UInt64
     public let pageSize: UInt64
     public let totalBytes: UInt64
 
@@ -59,6 +63,7 @@ public struct MemorySample: Sendable, Equatable {
         speculativePages: UInt64,
         purgeablePages: UInt64,
         externalPages: UInt64,
+        internalPages: UInt64,
         pageSize: UInt64,
         totalBytes: UInt64
     ) {
@@ -70,18 +75,29 @@ public struct MemorySample: Sendable, Equatable {
         self.speculativePages = speculativePages
         self.purgeablePages = purgeablePages
         self.externalPages = externalPages
+        self.internalPages = internalPages
         self.pageSize = pageSize
         self.totalBytes = totalBytes
     }
 
     /// Занятая память в том же смысле, в каком её считает «Мониторинг системы»:
-    /// активная и проводная память плюс сжатая, без файлового кэша.
+    /// анонимная (не файловая) память плюс проводная плюс сжатая.
+    ///
+    /// Раньше здесь стояло `activePages + externalPages`, что задваивало
+    /// файловый кэш: `external_page_count` — это подмножество активных
+    /// (и неактивных) страниц, а не отдельный пул сверху них, и добавление
+    /// его к `activePages` считало часть кэша дважды. На реальной машине
+    /// с большим кэшем (открытые вкладки браузера, смонтированные файлы)
+    /// это давало разрыв c «Мониторингом системы» в десятки процентных
+    /// пунктов — 93% против настоящих ~63%. `internal_page_count` (анонимная
+    /// память) не пересекается с файловым кэшем в принципе, поэтому именно
+    /// он и должен быть здесь, как в самом macOS.
     ///
     /// Наивное «всего минус свободно» показало бы 90% на любом маке —
     /// macOS честно занимает свободную память под кэш и отдаёт по первому
     /// требованию. Такая цифра пугает и ничего не значит.
     public var usedBytes: UInt64 {
-        let appPages = activePages &+ externalPages &- purgeablePages
+        let appPages = internalPages &- purgeablePages
         let pages = appPages &+ wiredPages &+ compressedPages
         return pages &* pageSize
     }
@@ -124,8 +140,27 @@ public enum SystemTemperature {
             return die.reduce(0) { $0 + $1.celsius } / Double(die.count)
         }
 
-        // Датчиков кристалла нет (другое поколение железа) — берём максимум
-        // из всего, кроме батареи: занижать температуру опаснее, чем завысить.
+        // Intel (путь SMC): `TC0D` — диод прямо на кристалле, есть не на
+        // всех моделях, но точнее всего, когда есть. `TC0P` универсален
+        // для 15 лет Intel Mac и это ровно то число, которое показывают
+        // iStat Menus/Macs Fan Control/smcFanControl подписью «CPU» —
+        // с ним и стоит сверяться на слух «горячо/не горячо».
+        //
+        // Без этой ветки код проваливался в резерв «максимум из всего»
+        // ниже — а максимум на реальном MacBookAir8,2 внутри `--diagnose`
+        // почти всегда `TC0E`/`TC0F` (цифровые датчики отдельных ядер,
+        // честно горячее под нагрузкой на Coffee Lake и новее), а не
+        // `TC0P`: разница на этой машине была 74° против 96° — не шум
+        // округления, а другой физический смысл показания.
+        for key in ["TC0D", "TC0P"] {
+            if let reading = plausible.first(where: { $0.name == key }) {
+                return reading.celsius
+            }
+        }
+
+        // Ни датчиков кристалла, ни привычных Intel-ключей — совсем
+        // незнакомая модель. Берём максимум из всего, кроме батареи:
+        // занижать температуру опаснее, чем завысить.
         let withoutBattery = plausible.filter { !$0.name.lowercased().contains("battery") }
         let pool = withoutBattery.isEmpty ? plausible : withoutBattery
         return pool.map(\.celsius).max()

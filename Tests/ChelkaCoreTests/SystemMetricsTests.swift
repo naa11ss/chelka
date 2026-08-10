@@ -60,12 +60,13 @@ struct MemorySampleTests {
             speculativePages: 0,
             purgeablePages: 0,
             externalPages: 0,
+            internalPages: active,
             pageSize: 16384,
             totalBytes: 16 * 1024 * 1024 * 1024
         )
     }
 
-    @Test("Занятая память складывается из активной, проводной и сжатой")
+    @Test("Занятая память складывается из анонимной, проводной и сжатой")
     func usedBytesComposition() {
         let memory = sample(active: 100, wired: 50, compressed: 25, free: 1000)
         #expect(memory.usedBytes == 175 * 16384)
@@ -73,16 +74,18 @@ struct MemorySampleTests {
 
     @Test("Файловый кэш не считается занятой памятью")
     func cacheIsNotCountedAsUsed() {
-        // Свободных страниц мало, но всё занято кэшем — доля должна быть низкой.
+        // Файловый кэш — это activePages/externalPages, а не internalPages:
+        // formula должна игнорировать его, сколько бы там ни было страниц.
         let cached = MemorySample(
-            activePages: 1000,
+            activePages: 900_500,
             wiredPages: 500,
             compressedPages: 0,
             inactivePages: 900_000,
             freePages: 100,
             speculativePages: 500_000,
             purgeablePages: 0,
-            externalPages: 0,
+            externalPages: 900_000,
+            internalPages: 1000,
             pageSize: 16384,
             totalBytes: 16 * 1024 * 1024 * 1024
         )
@@ -100,6 +103,7 @@ struct MemorySampleTests {
             speculativePages: 0,
             purgeablePages: 0,
             externalPages: 0,
+            internalPages: 10_000_000,
             pageSize: 16384,
             totalBytes: 16 * 1024 * 1024 * 1024
         )
@@ -117,6 +121,7 @@ struct MemorySampleTests {
             speculativePages: 0,
             purgeablePages: 0,
             externalPages: 0,
+            internalPages: 10,
             pageSize: 16384,
             totalBytes: 0
         )
@@ -156,6 +161,31 @@ struct SystemTemperatureTests {
             .init(name: "PMU tdie2", celsius: 44),
         ]
         #expect(SystemTemperature.representative(from: readings) == 44)
+    }
+
+    @Test("На Intel берётся TC0P, а не максимум из цифровых датчиков ядер")
+    func prefersTC0POnIntel() {
+        // Реальный набор с MacBookAir8,2, снятый через --diagnose под нагрузкой
+        // компиляции: TC0E/TC0F честно горячее (цифровые датчики ядер), но
+        // TC0P — то число, что 15 лет показывают сторонние утилиты как «CPU»
+        // и что ближе всего к ощущению корпуса на ощупь.
+        let readings: [TemperatureReading] = [
+            .init(name: "TC0P", celsius: 74.31),
+            .init(name: "TC0E", celsius: 93.55),
+            .init(name: "TC0F", celsius: 96.13),
+            .init(name: "TC1C", celsius: 83.0),
+            .init(name: "TC2C", celsius: 87.0),
+        ]
+        #expect(SystemTemperature.representative(from: readings) == 74.31)
+    }
+
+    @Test("На Intel без TC0P, но с TC0D — используется диод, а не максимум")
+    func prefersTC0DWhenTC0PMissing() {
+        let readings: [TemperatureReading] = [
+            .init(name: "TC0D", celsius: 71.0),
+            .init(name: "TC0F", celsius: 95.0),
+        ]
+        #expect(SystemTemperature.representative(from: readings) == 71.0)
     }
 
     @Test("Без датчиков кристалла берётся максимум, кроме батареи")
