@@ -32,6 +32,8 @@
 "thermal.serious" = "hot";
 "thermal.critical" = "overheating";
 "fan.auto" = "Auto";
+"fan.overheat.title" = "Temperature is elevated";
+"fan.overheat.body" = "%.0f °C while the fan is in manual mode. Check the control — you may want to switch it back to automatic.";
 "fan.rpm" = "rpm";
 
 /* Clipboard */
