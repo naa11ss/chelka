@@ -135,7 +135,7 @@ final class SMCReader {
         }
 
         let modeWritten = writeUInt8("F\(index)Md", value: 1)
-        let targetWritten = writeFloatFPE2("F\(index)Tg", value: targetRPM)
+        let targetWritten = writeTargetRPM("F\(index)Tg", rpm: targetRPM)
         return modeWritten && targetWritten
     }
 
@@ -147,6 +147,85 @@ final class SMCReader {
     }
 
     // MARK: - Диагностика
+
+    /// Реальный размер и смещения полей `SMCParamStruct`, как их посчитал
+    /// Swift — единообразный `kIOReturnBadArgument` на любом ключе похож на
+    /// несовпадение размера структуры с тем, что ждёт драйвер AppleSMC,
+    /// а не на «ключа нет», так что здесь можно свериться не гадая.
+    static var paramStructLayoutDescription: String {
+        "size=\(MemoryLayout<SMCParamStruct>.size) stride=\(MemoryLayout<SMCParamStruct>.stride) "
+            + "key@\(MemoryLayout<SMCParamStruct>.offset(of: \.key) ?? -1) "
+            + "vers@\(MemoryLayout<SMCParamStruct>.offset(of: \.vers) ?? -1) "
+            + "pLimitData@\(MemoryLayout<SMCParamStruct>.offset(of: \.pLimitData) ?? -1) "
+            + "keyInfo@\(MemoryLayout<SMCParamStruct>.offset(of: \.keyInfo) ?? -1) "
+            + "result@\(MemoryLayout<SMCParamStruct>.offset(of: \.result) ?? -1) "
+            + "status@\(MemoryLayout<SMCParamStruct>.offset(of: \.status) ?? -1) "
+            + "data8@\(MemoryLayout<SMCParamStruct>.offset(of: \.data8) ?? -1) "
+            + "data32@\(MemoryLayout<SMCParamStruct>.offset(of: \.data32) ?? -1) "
+            + "bytes@\(MemoryLayout<SMCParamStruct>.offset(of: \.bytes) ?? -1)"
+    }
+
+    struct KeyDiagnostic: Equatable {
+        /// `kernReturn != kIOReturnSuccess` значит, что драйвер вообще не
+        /// ответил — тогда `result`/`status` ничего не значат.
+        let kernReturn: Int32
+        let result: UInt8
+        let status: UInt8
+        let dataSize: UInt32
+    }
+
+    /// То же самое, что первая фаза `readRawBytes` (`kSMCReadKeyInfo`), но без
+    /// сокращения «нет — значит nil»: нужно различить «драйвер не ответил
+    /// вообще» (`kernReturn`) от «ответил, но код result ненулевой» (ключ
+    /// действительно не существует на этой модели) — `dumpKey` эту разницу
+    /// стирает, а для разведки протокола на новом железе она и есть ответ.
+    func diagnoseKeyInfo(_ key: String) -> KeyDiagnostic? {
+        guard connection != 0 else { return nil }
+
+        var infoRequest = SMCParamStruct()
+        infoRequest.key = Self.fourCC(key)
+        infoRequest.data8 = SMCSelector.readKeyInfo
+
+        let (response, kernReturn) = callRaw(infoRequest)
+        return KeyDiagnostic(
+            kernReturn: kernReturn,
+            result: response.result,
+            status: response.status,
+            dataSize: response.keyInfo.dataSize
+        )
+    }
+
+    /// То же самое различие («не ответил» vs «ответил отказом»), но для
+    /// записи: `setFanOverride` сводит успех к одному `Bool` на оба ключа
+    /// разом (`F{i}Md` и `F{i}Tg`), а на новой модели важно увидеть, какой
+    /// из них конкретно отклонён и с каким `result` — совпадением размера
+    /// дело не всегда исчерпывается, прошивка может отказать и по существу
+    /// (например, не отдавать вентилятор в ручной режим вовсе).
+    func diagnoseWrite(_ key: String, bytes: [UInt8]) -> KeyDiagnostic? {
+        guard connection != 0 else { return nil }
+
+        var infoRequest = SMCParamStruct()
+        infoRequest.key = Self.fourCC(key)
+        infoRequest.data8 = SMCSelector.readKeyInfo
+        let (infoResponse, infoKern) = callRaw(infoRequest)
+        guard infoKern == kIOReturnSuccess, infoResponse.result == 0 else {
+            return KeyDiagnostic(kernReturn: infoKern, result: infoResponse.result, status: infoResponse.status, dataSize: 0)
+        }
+
+        var writeRequest = SMCParamStruct()
+        writeRequest.key = Self.fourCC(key)
+        writeRequest.keyInfo.dataSize = infoResponse.keyInfo.dataSize
+        writeRequest.data8 = SMCSelector.writeBytes
+        writeRequest.bytes = SMCBytes32(bytes)
+
+        let (writeResponse, writeKern) = callRaw(writeRequest)
+        return KeyDiagnostic(
+            kernReturn: writeKern,
+            result: writeResponse.result,
+            status: writeResponse.status,
+            dataSize: infoResponse.keyInfo.dataSize
+        )
+    }
 
     struct RawKeyDump {
         let key: String
@@ -209,8 +288,19 @@ final class SMCReader {
         }
     }
 
-    private func writeFloatFPE2(_ key: String, value: Double) -> Bool {
-        writeBytes(key, bytes: SMCValueDecoder.encodeFPE2(value))
+    /// `F{i}Tg` кодировался как `fpe2` (2 байта) на моделях, откуда взят этот
+    /// список ключей, но на MacBookAir8,2 тот же ключ объявлен как честный
+    /// `flt` (4 байта, little-endian) — раскладка меняется по поколениям
+    /// железа так же, как набор самих ключей. Спрашиваем тип тем же
+    /// `kSMCReadKeyInfo`, каким уже пользуется чтение, и кодируем под то,
+    /// что реально объявил драйвер, а не под то, что было верно раньше.
+    private func writeTargetRPM(_ key: String, rpm: Double) -> Bool {
+        guard let raw = readRawBytes(key) else { return false }
+        switch raw.type {
+        case "fpe2": return writeBytes(key, bytes: SMCValueDecoder.encodeFPE2(rpm))
+        case "flt ": return writeBytes(key, bytes: SMCValueDecoder.encodeFloat32(rpm))
+        default: return false
+        }
     }
 
     private func writeUInt8(_ key: String, value: Int) -> Bool {
@@ -303,6 +393,29 @@ final class SMCReader {
         return output
     }
 
+    /// `call(_:)` без сокращения ошибки до `nil` — нужна только диагностике,
+    /// которой важно увидеть код `IOConnectCallStructMethod` даже когда он
+    /// не `kIOReturnSuccess`, а не просто узнать, что что-то не сработало.
+    private func callRaw(_ input: SMCParamStruct) -> (SMCParamStruct, kern_return_t) {
+        var mutableInput = input
+        var output = SMCParamStruct()
+        var outputSize = MemoryLayout<SMCParamStruct>.size
+
+        let result = withUnsafePointer(to: &mutableInput) { inPtr in
+            withUnsafeMutablePointer(to: &output) { outPtr in
+                IOConnectCallStructMethod(
+                    connection,
+                    SMCSelector.handleYPCEvent,
+                    inPtr,
+                    MemoryLayout<SMCParamStruct>.size,
+                    outPtr,
+                    &outputSize
+                )
+            }
+        }
+        return (output, result)
+    }
+
     private static func fourCC(_ key: String) -> UInt32 {
         var result: UInt32 = 0
         for byte in Array(key.utf8.prefix(4)) { result = (result << 8) | UInt32(byte) }
@@ -347,10 +460,21 @@ private struct SMCPLimitData {
     var memPLimit: UInt32 = 0
 }
 
+/// Хвостовые байты `_reserved` — не декоративные: без них Swift, укладывая
+/// эту структуру ВНУТРИ `SMCParamStruct`, экономит на выравнивании до
+/// границы 4 байт и втискивает следующее поле сразу после `dataAttributes`
+/// (у отдельно взятого типа `size` и `stride` из-за этого расходятся —
+/// пока структура не элемент массива, лишний хвост Swift не резервирует).
+/// Драйвер AppleSMC ждёт честные 12 байт на весь `SMCKeyInfoData`; без
+/// набивки размер `SMCParamStruct` получался на 4 байта меньше нужных 80,
+/// и `IOConnectCallStructMethod` на любом ключе отвечал kIOReturnBadArgument
+/// (0xE00002C2) — не «ключа нет», а «структура не того размера» (проверено
+/// на реальном Intel-железе, MacBookAir8,2).
 private struct SMCKeyInfo {
     var dataSize: UInt32 = 0
     var dataType: UInt32 = 0
     var dataAttributes: UInt8 = 0
+    var _reserved: (UInt8, UInt8, UInt8) = (0, 0, 0)
 }
 
 /// `bytes[32]` без родного массива фиксированного размера в Swift —

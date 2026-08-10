@@ -61,25 +61,45 @@ struct SMCValueDecoderTests {
         #expect(SMCValueDecoder.decodeFPE2([0x2E, 0xE0]) == 3000.0)
     }
 
-    // MARK: - flt (IEEE754 float, big-endian)
+    // MARK: - flt (IEEE754 float, little-endian — родной порядок байт x86_64)
 
     @Test("flt: сорок пять градусов")
     func floatFortyFive() {
-        let value = SMCValueDecoder.decodeFloat32([0x42, 0x34, 0x00, 0x00])
+        let value = SMCValueDecoder.decodeFloat32([0x00, 0x00, 0x34, 0x42])
         #expect(value != nil)
         #expect(abs(value! - 45.0) < 0.001)
     }
 
     @Test("flt: сто с половиной")
     func floatHundredPointFive() {
-        let value = SMCValueDecoder.decodeFloat32([0x42, 0xC9, 0x00, 0x00])
+        let value = SMCValueDecoder.decodeFloat32([0x00, 0x00, 0xC9, 0x42])
         #expect(value != nil)
         #expect(abs(value! - 100.5) < 0.001)
+    }
+
+    @Test("flt: реальные обороты вентилятора с MacBookAir8,2")
+    func floatRealFanRPM() {
+        // Байты сняты через --diagnose с реального железа: F0Mn/F0Mx/F0Tg.
+        #expect(abs(SMCValueDecoder.decodeFloat32([0x00, 0xC0, 0x28, 0x45])! - 2700.0) < 0.01)
+        #expect(abs(SMCValueDecoder.decodeFloat32([0x00, 0x00, 0xFA, 0x45])! - 8000.0) < 0.01)
     }
 
     @Test("flt: недостаточно байт — nil")
     func floatTooShort() {
         #expect(SMCValueDecoder.decodeFloat32([0x42, 0x34]) == nil)
+    }
+
+    @Test("flt: кодирование и разбор — круговой обход")
+    func floatEncodeRoundTrip() {
+        let bytes = SMCValueDecoder.encodeFloat32(2700.0)
+        #expect(bytes.count == 4)
+        #expect(abs(SMCValueDecoder.decodeFloat32(bytes)! - 2700.0) < 0.01)
+    }
+
+    @Test("flt: отрицательное и нечисловое значение обрезаются до нуля")
+    func floatEncodeClampsInvalidInput() {
+        #expect(SMCValueDecoder.decodeFloat32(SMCValueDecoder.encodeFloat32(-100)) == 0.0)
+        #expect(SMCValueDecoder.decodeFloat32(SMCValueDecoder.encodeFloat32(.nan)) == 0.0)
     }
 
     // MARK: - целые

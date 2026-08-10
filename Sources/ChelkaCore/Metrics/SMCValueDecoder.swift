@@ -17,10 +17,18 @@ public enum SMCValueDecoder {
         return Double(raw) / 256.0
     }
 
-    /// IEEE754 float, 4 байта, big-endian.
+    /// IEEE754 float, 4 байта, little-endian.
+    ///
+    /// В отличие от `sp78`/`fpe2` — это не самодельная SMC-кодировка с
+    /// фиксированной раскладкой бит, а сырое представление C-типа `float`
+    /// в памяти. На Intel-Mac (x86_64) это значит little-endian — проверено
+    /// на реальном железе (MacBookAir8,2): большие Mn/Mx вентилятора при
+    /// big-endian декодировались в денормализованный мусор около нуля,
+    /// а Ac/Mn/Mx/Tg разом превращались в круглые осмысленные обороты
+    /// (2700/8000 об/мин) только при перемене порядка байт на little-endian.
     public static func decodeFloat32(_ bytes: [UInt8]) -> Double? {
         guard bytes.count >= 4 else { return nil }
-        let bits = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
+        let bits = UInt32(bytes[3]) << 24 | UInt32(bytes[2]) << 16 | UInt32(bytes[1]) << 8 | UInt32(bytes[0])
         return Double(Float(bitPattern: bits))
     }
 
@@ -60,5 +68,15 @@ public enum SMCValueDecoder {
 
     public static func encodeUInt8(_ value: Int) -> [UInt8] {
         [UInt8(clamping: value)]
+    }
+
+    /// Обратная операция к `decodeFloat32` — little-endian, как и чтение:
+    /// на моделях, где `F{i}Tg` объявлен типом `flt`, а не `fpe2`, писать
+    /// нужно этим кодировщиком, иначе `writeBytes` отклонит запись по
+    /// несовпадению размера (4 байта против 2 у `encodeFPE2`).
+    public static func encodeFloat32(_ rpm: Double) -> [UInt8] {
+        let clamped = rpm.isFinite ? max(0, rpm) : 0
+        let bits = Float(clamped).bitPattern
+        return [UInt8(bits & 0xFF), UInt8((bits >> 8) & 0xFF), UInt8((bits >> 16) & 0xFF), UInt8((bits >> 24) & 0xFF)]
     }
 }
