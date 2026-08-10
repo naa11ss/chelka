@@ -139,10 +139,17 @@ final class MusicService: ObservableObject {
                         external?.artworkURL = media.artworkURL
                     }
 
-                    // Заголовок вкладки — запасной вариант, если чтение
-                    // скриптов в браузере не разрешено.
-                    if external?.detail == nil, let tab = BrowserTabTitle.currentTab(for: source.bundleID) {
-                        external?.detail = tab.title
+                    // Адрес вкладки нужен независимо от того, дал ли
+                    // mediaSession название трека — сайты нередко заполняют
+                    // title/artist, но не artwork (обычное дело для многих
+                    // стриминговых и подкаст-страниц). Раньше адрес
+                    // подтягивался только когда `detail` был пуст целиком,
+                    // из-за чего обложка для таких сайтов никогда не
+                    // находилась через запасной путь `og:image`, хотя он
+                    // и сработал бы. Заголовок вкладки при этом не
+                    // затирает уже полученное от mediaSession название.
+                    if external?.artworkURL == nil, let tab = BrowserTabTitle.currentTab(for: source.bundleID) {
+                        if external?.detail == nil { external?.detail = tab.title }
                         external?.pageURL = tab.url
                     }
                 }
@@ -228,7 +235,6 @@ final class MusicService: ObservableObject {
     /// у Music — запись файла на диск, каждые две секунды такое не гоняют.
     private func loadArtwork(for playing: NowPlaying) {
         let client = MusicSourceClient(source: playing.source)
-        let trackID = playing.trackID
 
         queue.async { [weak self] in
             let data = client.artwork()
@@ -236,8 +242,13 @@ final class MusicService: ObservableObject {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    // Пока грузили — трек мог смениться.
-                    guard self.nowPlaying?.trackID == trackID else { return }
+                    // Пока грузили — трек мог смениться. Сверяем источник
+                    // и trackID вместе, как и `NowPlaying.isSameTrack(as:)` —
+                    // одного trackID недостаточно, если он вообще когда-нибудь
+                    // совпадёт между Music и Spotify (числовой ID против
+                    // строкового URI Spotify практически исключено, но
+                    // сверка по одному полю уже была бы неполной сама по себе).
+                    guard self.nowPlaying?.isSameTrack(as: playing) == true else { return }
                     self.artwork = data.flatMap(NSImage.init(data:))
                 }
             }

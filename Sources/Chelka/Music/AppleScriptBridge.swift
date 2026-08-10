@@ -69,7 +69,16 @@ enum AppleScriptBridge {
 
         if process.isRunning {
             process.terminate()
-            _ = group.wait(timeout: .now() + 0.3)
+            if group.wait(timeout: .now() + 0.3) == .timedOut, process.isRunning {
+                // SIGTERM — вежливая просьба, её можно проигнорировать
+                // (системный диалог, по-настоящему зависший процесс).
+                // SIGKILL нельзя ни перехватить, ни отложить — после него
+                // труба гарантированно закроется, и фоновые читатели
+                // (`readDataToEndOfFile`) разблокируются, а не останутся
+                // висеть в фоне до следующего перезапуска приложения.
+                kill(process.processIdentifier, SIGKILL)
+                _ = group.wait(timeout: .now() + 0.3)
+            }
             Log.media.error("скрипт не ответил за \(timeout, format: .fixed(precision: 1)) с — процесс снят")
             return .failure(.timedOut)
         }

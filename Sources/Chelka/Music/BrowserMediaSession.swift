@@ -119,12 +119,22 @@ enum BrowserMediaSession {
             return nil
 
         case .failure(let failure):
-            backoffLock.lock()
-            backoffUntil[bundleID] = Date().addingTimeInterval(backoffInterval)
-            availability[bundleID] = .blocked
-            backoffLock.unlock()
+            // Только `.automationDenied`/`.timedOut` — это действительно
+            // «доступ запрещён», и стоит подождать 5 минут, а заодно
+            // пометить `.blocked` (это то, что показывает подсказку
+            // «включите JavaScript из Apple Events» в разрешениях). Прочие
+            // отказы (`.scriptError` — например, у браузера сейчас нет ни
+            // одного окна, `.appNotRunning`) не про разрешения и не должны
+            // ни блокировать источник на пять минут, ни зажигать эту
+            // подсказку — тот же принцип, что уже применён в `BrowserTabTitle`.
+            if failure == .automationDenied || failure == .timedOut {
+                backoffLock.lock()
+                backoffUntil[bundleID] = Date().addingTimeInterval(backoffInterval)
+                availability[bundleID] = .blocked
+                backoffLock.unlock()
+            }
             Log.media.info(
-                "чтение mediaSession в \(bundleID, privacy: .public) недоступно (\(String(describing: failure), privacy: .public)), пауза \(Int(backoffInterval)) с"
+                "чтение mediaSession в \(bundleID, privacy: .public) недоступно (\(String(describing: failure), privacy: .public))"
             )
             return nil
         }

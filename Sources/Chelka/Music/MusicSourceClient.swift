@@ -28,19 +28,27 @@ struct MusicSourceClient {
         }
     }
 
+    /// Разделитель полей — не `linefeed`: название трека, исполнитель или
+    /// альбом теоретически могут содержать перевод строки (нестандартно
+    /// оформленные теги), и тогда разбор по позиции `lines[N]` съехал бы.
+    /// ASCII 31 (Unit Separator) как раз и предназначен для этой роли —
+    /// управляющий символ, которому неоткуда взяться в реальных метаданных.
+    private static let fieldSeparator = "\u{1F}"
+
     private var stateScript: String {
         switch source {
         case .appleMusic:
             return """
             tell application "Music"
                 if player state is stopped then return "stopped"
+                set sep to character id 31
                 set t to current track
-                set out to (player state as text) & linefeed
-                set out to out & (database ID of t as text) & linefeed
-                set out to out & (name of t) & linefeed
-                set out to out & (artist of t) & linefeed
-                set out to out & (album of t) & linefeed
-                set out to out & ((duration of t) as text) & linefeed
+                set out to (player state as text) & sep
+                set out to out & (database ID of t as text) & sep
+                set out to out & (name of t) & sep
+                set out to out & (artist of t) & sep
+                set out to out & (album of t) & sep
+                set out to out & ((duration of t) as text) & sep
                 set out to out & ((player position) as text)
                 return out
             end tell
@@ -49,13 +57,14 @@ struct MusicSourceClient {
             return """
             tell application "Spotify"
                 if player state is stopped then return "stopped"
+                set sep to character id 31
                 set t to current track
-                set out to (player state as text) & linefeed
-                set out to out & (id of t as text) & linefeed
-                set out to out & (name of t) & linefeed
-                set out to out & (artist of t) & linefeed
-                set out to out & (album of t) & linefeed
-                set out to out & (((duration of t) / 1000) as text) & linefeed
+                set out to (player state as text) & sep
+                set out to out & (id of t as text) & sep
+                set out to out & (name of t) & sep
+                set out to out & (artist of t) & sep
+                set out to out & (album of t) & sep
+                set out to out & (((duration of t) / 1000) as text) & sep
                 set out to out & ((player position) as text)
                 return out
             end tell
@@ -64,9 +73,9 @@ struct MusicSourceClient {
     }
 
     private func parse(_ text: String) -> NowPlaying? {
-        let lines = text.components(separatedBy: .newlines)
+        let lines = text.components(separatedBy: Self.fieldSeparator)
         guard lines.count >= 7 else {
-            Log.media.error("непонятный ответ плеера: \(lines.count) строк")
+            Log.media.error("непонятный ответ плеера: \(lines.count) полей")
             return nil
         }
 

@@ -51,6 +51,14 @@ enum AudioSourceMonitor {
         "com.apple.CoreSpeech",
         "com.apple.assistantd",
         "com.ivan.chelka",
+        // Music и Spotify обрабатываются отдельным, приоритетным путём
+        // (см. `MusicSourceClient`) — трек, обложка, позиция. Если тот путь
+        // отказал (например, автоматизация запрещена) и звук при этом реально
+        // играет, CoreAudio честно найдёт эти два приложения в списке
+        // источников — без исключения здесь `.automationDenied` подменялся бы
+        // молчаливой карточкой «звучит Music» без единого намёка, что чинить.
+        "com.apple.Music",
+        "com.spotify.client",
     ]
 
     /// Кто сейчас выводит звук.
