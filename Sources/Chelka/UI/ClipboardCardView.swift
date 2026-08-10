@@ -36,6 +36,24 @@ struct ClipboardCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .overlay {
+                    // Только над содержимым, не над подвалом: подвал несёт
+                    // кнопки закрепления/удаления, а этот оверлей перехватывает
+                    // все клики в своих границах — покрывая всю карточку
+                    // целиком, он молча глушил бы эти кнопки, стоило записи
+                    // попасть в выбор из двух и более. Активен он только
+                    // пока эта карточка — часть такого выбора: для одиночных
+                    // карточек (обычный случай) в дереве видов его вообще
+                    // нет, они остаются на уже проверенном пути
+                    // `.onTapGesture`/`.onDrag` ниже.
+                    if isMultiSelected {
+                        BatchDragOverlay(
+                            onClick: onCopy,
+                            onToggleSelect: onToggleSelect,
+                            entries: allSelectedEntries
+                        )
+                    }
+                }
 
             footer
         }
@@ -60,22 +78,6 @@ struct ClipboardCardView: View {
             }
         }
         .onDrag(itemProvider)
-        .overlay {
-            // Активен только пока эта карточка — часть множественного
-            // выбора: перехватывает клик и перетаскивание на AppKit-уровне
-            // для всей пачки разом. Для одиночных карточек (обычный
-            // подавляющий случай) в дереве видов его вообще нет — они
-            // целиком остаются на уже проверенном пути `.onTapGesture`/
-            // `.onDrag` выше, ничего в их поведении не меняется.
-            if isMultiSelected {
-                BatchDragOverlay(
-                    onClick: onCopy,
-                    onToggleSelect: onToggleSelect,
-                    entries: allSelectedEntries
-                )
-            }
-        }
-        .help(tooltip)
     }
 
     // MARK: - Содержимое
@@ -212,24 +214,6 @@ struct ClipboardCardView: View {
                 }
                 .transition(.opacity)
         }
-    }
-
-    /// Системная подсказка сама не обрезается и не подчиняется рамке
-    /// карточки — длинное имя файла скриншота или длинный скопированный
-    /// текст рисуют её шире всей карточки, вылезающей поверх соседних.
-    /// Обрезать нужно здесь, до того как строка уйдёт в `.help(_:)`.
-    private static let tooltipPreviewLimit = 140
-
-    private var tooltip: String {
-        var parts = [truncatedForTooltip(item.preview)]
-        if let subtitle = item.subtitle { parts.append(subtitle) }
-        parts.append(T("clipboard.tooltip", "Клик — в буфер · Перетащи, чтобы вынести"))
-        return parts.joined(separator: "\n")
-    }
-
-    private func truncatedForTooltip(_ text: String) -> String {
-        guard text.count > Self.tooltipPreviewLimit else { return text }
-        return String(text.prefix(Self.tooltipPreviewLimit)) + "…"
     }
 }
 

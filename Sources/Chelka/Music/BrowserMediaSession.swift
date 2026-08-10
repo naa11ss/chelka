@@ -21,19 +21,49 @@ enum BrowserMediaSession {
     }
 
     /// Скрипт возвращает JSON или пустую строку. Ошибки внутри страницы
-    /// гасим на месте: сломанный сайт не должен ронять опрос.
+    /// гасим на месте: сломанный сайт не должен ронять опрос. `playing` —
+    /// потому что "текущая" вкладка браузера (активная/видимая) и та,
+    /// что реально звучит, — разные вещи: можно слушать SoundCloud в
+    /// фоновой вкладке, читая статью в активной. Без этого признака
+    /// нечем отличить одну от другой при переборе всех вкладок разом.
     private static let javaScript = """
     (function(){try{var m=navigator.mediaSession&&navigator.mediaSession.metadata;\
     if(!m||!m.title)return '';var a=(m.artwork||[]).map(function(x){return x.src;});\
-    return JSON.stringify({title:m.title,artist:m.artist||'',album:m.album||'',artwork:a});}catch(e){return '';}})()
+    var p=navigator.mediaSession.playbackState==='playing';\
+    return JSON.stringify({title:m.title,artist:m.artist||'',album:m.album||'',artwork:a,playing:p});}catch(e){return '';}})()
     """
 
+    /// Разделитель между результатами разных вкладок — ASCII 30 (Record
+    /// Separator), не пересекается с ASCII 31, которым уже размечены поля
+    /// внутри одной записи в `MusicSourceClient`.
+    private static let tabResultSeparator = "\u{1E}"
+
+    /// Перебирает КАЖДУЮ вкладку каждого окна, а не только активную:
+    /// CoreAudio (`AudioSourceMonitor`) находит, что звук выводит браузер
+    /// как процесс, но не какая именно вкладка внутри него — раньше здесь
+    /// бралась `current tab of front window`, и если пользователь смотрел
+    /// одну вкладку, а звук шёл из другой (фоновой), карточка показывала
+    /// название и обложку не того, что реально играет.
     private static func script(for bundleID: String) -> String? {
         switch bundleID {
         case "com.apple.Safari":
             return """
             tell application "Safari"
-                do JavaScript "\(escaped)" in current tab of front window
+                set outputList to {}
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        try
+                            set r to (do JavaScript "\(escaped)" in t)
+                        on error
+                            set r to ""
+                        end try
+                        if r is not "" then set end of outputList to r
+                    end repeat
+                end repeat
+                set AppleScript's text item delimiters to (character id 30)
+                set outputStr to outputList as text
+                set AppleScript's text item delimiters to ""
+                return outputStr
             end tell
             """
         case "com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser",
@@ -41,7 +71,21 @@ enum BrowserMediaSession {
             let appName = chromiumName(for: bundleID)
             return """
             tell application "\(appName)"
-                execute active tab of front window javascript "\(escaped)"
+                set outputList to {}
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        try
+                            set r to (execute t javascript "\(escaped)")
+                        on error
+                            set r to ""
+                        end try
+                        if r is not "" then set end of outputList to r
+                    end repeat
+                end repeat
+                set AppleScript's text item delimiters to (character id 30)
+                set outputStr to outputList as text
+                set AppleScript's text item delimiters to ""
+                return outputStr
             end tell
             """
         default:
@@ -109,7 +153,7 @@ enum BrowserMediaSession {
             backoffLock.lock()
             availability[bundleID] = .allowed
             backoffLock.unlock()
-            return parse(output)
+            return parse(multiTabOutput: output)
 
         case .success:
             // Скрипты разрешены, но на странице ничего не играет.
@@ -140,7 +184,26 @@ enum BrowserMediaSession {
         }
     }
 
-    static func parse(_ json: String) -> Metadata? {
+    /// Результат по одной вкладке, с признаком "реально звучит сейчас" —
+    /// сайты, честно выставляющие `playbackState`, встречаются не всегда,
+    /// поэтому это предпочтение, а не жёсткий фильтр.
+    private struct TabResult {
+        let metadata: Metadata
+        let playing: Bool
+    }
+
+    /// Разбирает результаты со всех вкладок разом и выбирает ту, что реально
+    /// играет. Ни одна не отметилась как `playing` (сайт не поддерживает
+    /// `playbackState`) — берём первую с осмысленными метаданными, как
+    /// раньше при одной-единственной активной вкладке.
+    static func parse(multiTabOutput output: String) -> Metadata? {
+        let results = output
+            .components(separatedBy: Self.tabResultSeparator)
+            .compactMap(parseOneTab)
+        return results.first { $0.playing }?.metadata ?? results.first?.metadata
+    }
+
+    private static func parseOneTab(_ json: String) -> TabResult? {
         guard let data = json.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let title = object["title"] as? String,
@@ -154,7 +217,11 @@ enum BrowserMediaSession {
         let artwork = (object["artwork"] as? [String])?
             .compactMap(URL.init(string:))
             .last
+        let playing = object["playing"] as? Bool ?? false
 
-        return Metadata(title: title, artist: artist, album: album, artworkURL: artwork)
+        return TabResult(
+            metadata: Metadata(title: title, artist: artist, album: album, artworkURL: artwork),
+            playing: playing
+        )
     }
 }

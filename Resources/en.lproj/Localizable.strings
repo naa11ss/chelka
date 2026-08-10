@@ -44,7 +44,6 @@
 "clipboard.pin" = "Pin";
 "clipboard.unpin" = "Unpin";
 "clipboard.delete" = "Delete";
-"clipboard.tooltip" = "Click to copy · Drag to take it out";
 "clipboard.rejected.concealed" = "Skipped password manager content";
 "clipboard.rejected.blacklisted" = "%@ is blocklisted";
 "clipboard.rejected.tooLarge" = "Entry too large — %@";
