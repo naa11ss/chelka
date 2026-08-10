@@ -24,7 +24,19 @@ final class NotchController {
     /// а SwiftUI `DragGesture` после этого просто не получает продолжения:
     /// клик (без промежуточных `leftMouseDragged`) эту цепочку не задевает
     /// и поэтому всегда работал, а протяжка — нет.
+    ///
+    /// Есть случай, когда `mouseUp` до этого монитора вообще не доходит:
+    /// перетаскивание записи буфера наружу (`.onDrag` в `ClipboardCardView`)
+    /// запускает настоящую `NSDraggingSession` — как только порог перетаскивания
+    /// пройден, менеджер перетаскивания забирает событие себе, и завершающий
+    /// `mouseUp` уходит источнику как `NSDraggingSource`, а не как обычное
+    /// `NSEvent` через `sendEvent:`. Без страховки `isMouseButtonDown` застрял
+    /// бы в `true` навсегда после первого же вытаскивания записи из буфера —
+    /// `mouseButtonDownWatchdog` снимает его сам, если `mouseUp` не пришёл
+    /// за разумное время.
     private var isMouseButtonDown = false
+    private var mouseButtonDownWatchdog: DispatchWorkItem?
+    private static let mouseButtonDownWatchdogDelay: TimeInterval = 2
 
     private var stateMachine = HoverStateMachine()
     private var viewModel: NotchViewModel
@@ -100,7 +112,17 @@ final class NotchController {
             switch event.type {
             case .leftMouseDown, .rightMouseDown, .otherMouseDown:
                 self.isMouseButtonDown = true
+                self.mouseButtonDownWatchdog?.cancel()
+                let watchdog = DispatchWorkItem { [weak self] in
+                    guard let self else { return }
+                    self.isMouseButtonDown = false
+                    self.updateMousePassThrough(for: self.cursorProvider())
+                }
+                self.mouseButtonDownWatchdog = watchdog
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.mouseButtonDownWatchdogDelay, execute: watchdog)
             case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+                self.mouseButtonDownWatchdog?.cancel()
+                self.mouseButtonDownWatchdog = nil
                 self.isMouseButtonDown = false
                 self.updateMousePassThrough(for: self.cursorProvider())
             default:
@@ -442,6 +464,19 @@ final class NotchController {
 
         Log.notch.info("конфигурация экранов изменилась, пересобираю раскладку")
         layout = newLayout
+
+        // Пересборка визуально сворачивает виджет через `forceCollapse()`
+        // ниже, но сама по себе не трогает то, что держит закреплённое
+        // открытие — глобальные хоткеи 1…9/Esc и таймер автозакрытия.
+        // Без этой очистки следующая цифра, набранная где угодно в системе
+        // после переподключения монитора, тихо выбирала бы запись из буфера
+        // вместо того, чтобы просто напечататься.
+        if stateMachine.isPinned {
+            unregisterQuickPickHotkeys()
+            pinnedAutoCloseTimer?.invalidate()
+            pinnedAutoCloseTimer = nil
+        }
+
         stateMachine.forceCollapse()
         applyLayoutToPanel()
         applyState(animated: false)

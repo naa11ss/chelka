@@ -217,13 +217,35 @@ struct HoverAnchorTests {
         #expect(abs(layout.expandedRectScreen.midX - anchor.midX) < 1)
     }
 
-    @Test("Значок у самого края экрана не выталкивает виджет за границу")
+    @Test("Значок у самого края экрана не выталкивает виджет за границу, но панель сохраняет отступ под флare")
     func anchorNearEdgeStaysOnScreen() {
         let anchor = CGRect(x: 2530, y: 1416, width: 24, height: 24)
         let layout = NotchGeometry.layout(for: plainScreen, anchor: anchor)
 
+        // Видимая, интерактивная поверхность виджета никогда не съезжает
+        // за пределы экрана — даже когда сам значок стоит у самого края.
         #expect(layout.expandedRectScreen.maxX <= plainScreen.frame.maxX)
-        #expect(layout.panelFrame.maxX <= plainScreen.frame.maxX)
+
+        // Панели разрешено высунуться за экран ровно настолько, чтобы между
+        // `expandedRectScreen` и её собственным краем остался полный отступ
+        // `panelPadding` — иначе закруглённые "уши" виджета (`NotchRootView`)
+        // обрезались бы рамкой окна, когда обе стороны клэмпятся к одной
+        // и той же границе экрана.
+        #expect(layout.panelFrame.maxX - layout.expandedRectScreen.maxX == NotchMetrics.default.panelPadding)
+        #expect(layout.panelFrame.maxX <= plainScreen.frame.maxX + NotchMetrics.default.panelPadding)
+    }
+
+    @Test("Зона наведения у значка возле края не выходит за экран")
+    func hoverRectClampedNearEdge() {
+        let anchor = CGRect(x: 2530, y: 1416, width: 24, height: 24)
+        let layout = NotchGeometry.layout(for: plainScreen, anchor: anchor)
+
+        // Без клэмпа ширина в 2×hoverInset вокруг значка у самого края
+        // уводит зону наведения за границу экрана — на многоэкранной
+        // раскладке это значило бы реагировать на курсор, стоящий уже
+        // на соседнем мониторе.
+        #expect(layout.hoverRectScreen.minX >= plainScreen.frame.minX)
+        #expect(layout.hoverRectScreen.maxX <= plainScreen.frame.maxX)
     }
 
     @Test("Значок с другого экрана игнорируется")

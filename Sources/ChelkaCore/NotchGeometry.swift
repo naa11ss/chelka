@@ -201,7 +201,19 @@ public enum NotchGeometry {
             width: panel.width,
             height: screen.frame.maxY - panel.minY
         )
-        panel = clampHorizontally(panel, within: screen.frame)
+        // Клэмп панели — к экрану, расширенному на `panelPadding`, а не впритык
+        // к самому экрану. `expanded` уже прижат к настоящей границе экрана
+        // своим собственным клэмпом (см. `expandedRect`) — то есть видимая,
+        // интерактивная поверхность виджета никогда не съезжает на соседний
+        // монитор. Но если клэмпить панель к той же самой границе, отступ
+        // `panelPadding` между этой границей и краем панели на прижатой
+        // стороне схлопывается в ноль: `NotchRootView.surfaceRect` рассчитывает
+        // на этот отступ, чтобы разместить скруглённые "уши" виджета
+        // (`-DS.flare`, 12pt), и без запаса они обрезаются рамкой окна.
+        // Сама панель невидима и не интерактивна за пределами `expanded`/
+        // `collapsed`, так что немного вылезти за экран ради этого запаса
+        // безопасно — как и было для верхнего края с самого начала.
+        panel = clampHorizontally(panel, within: screen.frame.insetBy(dx: -metrics.panelPadding, dy: 0))
 
         // Зона наведения шире и ниже свёрнутого вида: внутри выреза курсор
         // не виден, и попадать туда вслепую неудобно. Полоса под вырезом
@@ -211,11 +223,18 @@ public enum NotchGeometry {
             screen.frame.minY,
             collapsed.minY - metrics.hoverBelowNotch
         )
-        let hover = CGRect(
-            x: collapsed.minX - metrics.hoverInset,
-            y: hoverBottom,
-            width: collapsed.width + metrics.hoverInset * 2,
-            height: hoverTop - hoverBottom
+        // В отличие от панели — это интерактивная зона (по ней решается,
+        // раскрывать ли виджет), и она обязана оставаться на своём экране:
+        // без клэмпа значок меню-бара у самого края мог бы породить зону,
+        // цепляющую координаты соседнего монитора в многоэкранной раскладке.
+        let hover = clampHorizontally(
+            CGRect(
+                x: collapsed.minX - metrics.hoverInset,
+                y: hoverBottom,
+                width: collapsed.width + metrics.hoverInset * 2,
+                height: hoverTop - hoverBottom
+            ),
+            within: screen.frame
         )
 
         return NotchLayout(

@@ -8,6 +8,10 @@ struct ClipboardPane: View {
     @ObservedObject var service: ClipboardService
     /// Индекс записи, по которой только что кликнули — для отметки «скопировано».
     @State private var justCopied: UUID?
+    /// Метка конкретного клика — двух кликов по одной и той же записи
+    /// подряд недостаточно отличить сравнением `justCopied == item.id`,
+    /// см. `copy(_:)`.
+    @State private var justCopiedToken = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -97,9 +101,19 @@ struct ClipboardPane: View {
         service.copyToPasteboard(id: item.id)
         withAnimation(NotchAnimation.content) { justCopied = item.id }
 
+        // Свой токен на каждый клик — двух кликов по одной и той же записи
+        // в пределах 1.2с недостаточно отличить одним лишь `item.id`: таймер
+        // первого клика нашёл бы `justCopied == item.id` всё ещё истинным
+        // (второй клик поставил то же значение) и погасил бы значок раньше
+        // срока второго клика. Тот же приём, что уже применён в `MusicCard`
+        // для вспышки свайпа.
+        let token = UUID()
+        justCopiedToken = token
+
         Task {
             try? await Task.sleep(for: .seconds(1.2))
             await MainActor.run {
+                guard justCopiedToken == token else { return }
                 withAnimation(NotchAnimation.content) {
                     if justCopied == item.id { justCopied = nil }
                 }
