@@ -128,20 +128,27 @@ enum ClipboardDemo {
             let expected = service.history.items.count
             var storedCount = -1
 
+            var timedOut = false
             if let verification = service.makeVerificationStore() {
                 let semaphore = DispatchSemaphore(value: 0)
                 Task.detached {
                     storedCount = ((try? await verification.loadItems()) ?? []).count
                     semaphore.signal()
                 }
+                // Ограничено, в отличие от остальных ожиданий в этом файле
+                // не было: застрявшая `ClipboardStore` (блокировка файла базы
+                // другим процессом, повреждённая база) вешала бы `--clipboard-demo`
+                // навсегда — без диагностики, без кода выхода, ничего.
+                let deadline = Date().addingTimeInterval(5)
                 while semaphore.wait(timeout: .now()) == .timedOut {
+                    guard Date() < deadline else { timedOut = true; break }
                     RunLoop.main.run(until: Date().addingTimeInterval(0.05))
                 }
             }
 
             check("история лежит на диске и читается заново",
-                  storedCount == expected,
-                  detail: "в памяти \(expected), на диске \(storedCount)")
+                  !timedOut && storedCount == expected,
+                  detail: timedOut ? "проверка на диске не ответила за 5с" : "в памяти \(expected), на диске \(storedCount)")
         }
 
         print("")
