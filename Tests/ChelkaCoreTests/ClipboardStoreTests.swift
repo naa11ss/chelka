@@ -23,6 +23,33 @@ private func makeItem(kind: ClipboardKind, preview: String, key: String, size: I
     )
 }
 
+@Suite("Кодирование записи буфера")
+struct ClipboardItemCodingTests {
+
+    @Test("UTI картинки переживает круговой обход JSON")
+    func utiRoundTrips() throws {
+        let item = ClipboardItem(
+            kind: .image, createdAt: Date(timeIntervalSince1970: 1000),
+            contentKey: "k", preview: "снимок", uti: "public.tiff", byteSize: 100
+        )
+        let decoded = try JSONDecoder().decode(ClipboardItem.self, from: try JSONEncoder().encode(item))
+        #expect(decoded.uti == "public.tiff")
+    }
+
+    @Test("Запись, сохранённая до появления uti, читается — uti становится nil")
+    func missingUTIDecodesToNil() throws {
+        // Тот же набор полей, что уже лежит на диске у пользователей,
+        // обновившихся с версии без этого поля — без обратной совместимости
+        // вся история буфера отказалась бы загружаться после обновления.
+        let legacyJSON = """
+        {"id":"\(UUID().uuidString)","kind":"image","createdAt":1000,"isPinned":false,
+         "contentKey":"k","preview":"снимок","byteSize":100}
+        """
+        let decoded = try JSONDecoder().decode(ClipboardItem.self, from: Data(legacyJSON.utf8))
+        #expect(decoded.uti == nil)
+    }
+}
+
 @Suite("Шифрование")
 struct ClipboardCryptoTests {
 

@@ -66,6 +66,12 @@ public struct ClipboardItem: Sendable, Equatable, Identifiable, Codable {
     /// Bundle ID приложения, из которого скопировано.
     public let sourceApp: String?
 
+    /// UTI картинки (`public.png`/`public.jpeg`/`public.tiff`) — `nil` для
+    /// текста и файлов. Нужен синхронно, до загрузки самой нагрузки:
+    /// перетаскивание наружу объявляет системе тип данных заранее,
+    /// `NSItemProvider` не умеет узнавать его по ходу дела.
+    public let uti: String?
+
     public let byteSize: Int
 
     /// Размеры картинки в точках — чтобы список не декодировал данные ради подписи.
@@ -81,6 +87,7 @@ public struct ClipboardItem: Sendable, Equatable, Identifiable, Codable {
         preview: String,
         subtitle: String? = nil,
         sourceApp: String? = nil,
+        uti: String? = nil,
         byteSize: Int,
         pixelWidth: Int? = nil,
         pixelHeight: Int? = nil
@@ -93,6 +100,7 @@ public struct ClipboardItem: Sendable, Equatable, Identifiable, Codable {
         self.preview = preview
         self.subtitle = subtitle
         self.sourceApp = sourceApp
+        self.uti = uti
         self.byteSize = byteSize
         self.pixelWidth = pixelWidth
         self.pixelHeight = pixelHeight

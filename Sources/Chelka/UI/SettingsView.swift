@@ -56,9 +56,6 @@ private struct GeneralSettings: View {
                         .font(.caption)
                 }
             }
-            Text(T("settings.widgetSize.hint", "Меняет только размер виджета. Шрифт остаётся тем же — он и так на грани читаемости."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
             Toggle(T("settings.launchAtLogin", "Запускать при входе в систему"), isOn: launchBinding)
 

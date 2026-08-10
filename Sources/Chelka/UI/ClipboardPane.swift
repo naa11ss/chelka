@@ -146,7 +146,14 @@ struct ClipboardPane: View {
             }
 
         case .image:
-            let uti = UTType.png.identifier
+            // Записанный при копировании UTI, а не всегда PNG: обычное
+            // копирование картинки часто кладёт на буфер TIFF или JPEG,
+            // а `handleScreenshotFile` — то, что реально лежит в файле
+            // снимка. Объявить системе "это PNG", когда байты на самом
+            // деле TIFF, — значит, что принимающее приложение (Finder,
+            // любой редактор) не сможет прочитать перетащенные данные:
+            // перетаскивание визуально "работает", но ничего не долетает.
+            let uti = item.uti ?? UTType.png.identifier
             provider.suggestedName = suggestedImageName(for: item)
             provider.registerDataRepresentation(forTypeIdentifier: uti, visibility: .all) { completion in
                 Task {
@@ -182,8 +189,12 @@ struct ClipboardPane: View {
         if item.preview.lowercased().hasSuffix(".png") || item.preview.lowercased().hasSuffix(".jpg") {
             return item.preview
         }
+        // Расширение — от настоящего UTI, не всегда .png: имя с чужим
+        // расширением поверх, скажем, TIFF-байт сбивает с толку то, во что
+        // перетащенный файл открывается по умолчанию.
+        let ext = item.uti.flatMap { UTType($0)?.preferredFilenameExtension } ?? "png"
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
-        return "Chelka \(formatter.string(from: item.createdAt)).png"
+        return "Chelka \(formatter.string(from: item.createdAt)).\(ext)"
     }
 }

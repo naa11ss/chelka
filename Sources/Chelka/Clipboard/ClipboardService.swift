@@ -200,6 +200,8 @@ final class ClipboardService: ObservableObject {
     private func ingest(_ reading: PasteboardReader.Reading, sourceApp: String?) {
         let contentKey = crypto.contentKey(for: reading.payload.hashableBytes)
 
+        let uti: String? = if case .image(_, let uti) = reading.payload { uti } else { nil }
+
         let item = ClipboardItem(
             kind: reading.payload.kind,
             createdAt: Date(),
@@ -207,6 +209,7 @@ final class ClipboardService: ObservableObject {
             preview: reading.preview,
             subtitle: reading.subtitle,
             sourceApp: sourceApp,
+            uti: uti,
             byteSize: reading.payload.byteSize,
             pixelWidth: reading.pixelWidth,
             pixelHeight: reading.pixelHeight

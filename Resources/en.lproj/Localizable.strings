@@ -59,7 +59,6 @@
 "settings.theme" = "Theme:";
 "settings.widgetSize" = "Widget size:";
 "settings.widgetSize.reset" = "Reset";
-"settings.widgetSize.hint" = "Only changes the widget's size. The font stays the same — it's already about as small as it should get.";
 "settings.launchAtLogin" = "Launch at login";
 "settings.launchBlocked" = "Launch at login is blocked in System Settings → Login Items.";
 "settings.launchFailed" = "Could not change launch at login.";
