@@ -180,10 +180,21 @@ struct ClipboardCardView: View {
         }
     }
 
+    /// Системная подсказка сама не обрезается и не подчиняется рамке
+    /// карточки — длинное имя файла скриншота или длинный скопированный
+    /// текст рисуют её шире всей карточки, вылезающей поверх соседних.
+    /// Обрезать нужно здесь, до того как строка уйдёт в `.help(_:)`.
+    private static let tooltipPreviewLimit = 140
+
     private var tooltip: String {
-        var parts = [item.preview]
+        var parts = [truncatedForTooltip(item.preview)]
         if let subtitle = item.subtitle { parts.append(subtitle) }
         parts.append(T("clipboard.tooltip", "Клик — в буфер · Перетащи, чтобы вынести"))
         return parts.joined(separator: "\n")
+    }
+
+    private func truncatedForTooltip(_ text: String) -> String {
+        guard text.count > Self.tooltipPreviewLimit else { return text }
+        return String(text.prefix(Self.tooltipPreviewLimit)) + "…"
     }
 }
