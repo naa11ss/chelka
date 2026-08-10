@@ -34,6 +34,14 @@ final class MetricsService: ObservableObject {
     /// или ручной процент. Живёт до explicit смены пользователем или
     /// до выхода из приложения — сворачивание виджета его не сбрасывает.
     private var fanOverrides: [Int: FanOverride] = [:]
+    /// Порядковый номер последней заявки на каждый вентилятор — сравнение
+    /// `fanOverrides[index] == requested` по значению путало бы старый
+    /// ответ с новым, если пользователь дважды подряд выставил один и тот
+    /// же процент (например, поправил слайдер туда-обратно): оба запроса
+    /// имели бы одинаковое значение, и устаревший ответ мог бы "выиграть"
+    /// гонку и затереть только что подтверждённый новый. Здесь сравнивается
+    /// сама заявка по номеру, а не то, что она просит.
+    private var fanRequestGeneration: [Int: Int] = [:]
 
     /// Разрешён 0% на регуляторе — страховку от «выключил и забыл» несёт
     /// не сам регулятор, а этот сервис: предупреждает уведомлением, когда
@@ -282,18 +290,24 @@ final class MetricsService: ObservableObject {
         let requested: FanOverride = percent.map { .percent(FanPercent.snap($0)) } ?? .auto
         let targetRPM: Double? = percent.map { FanPercent.rpm(forPercent: FanPercent.snap($0), minRPM: limits.min, maxRPM: limits.max) }
         fanOverrides[index] = requested
+        let generation = (fanRequestGeneration[index] ?? 0) + 1
+        fanRequestGeneration[index] = generation
         // `snapshot` иначе обновился бы только на следующем тике таймера
         // (раз в 1.5 с) — до этого регулятор на мгновение показывал бы
         // старое значение поверх уже отпущенного пальца: выглядит как
         // «прыгнул назад к прошлому проценту, потом сам доехал до нужного».
         patchFanOverride(index: index, override: requested)
 
-        Task { await self.applyPrivilegedWrite(index: index, requested: requested, targetRPM: targetRPM) }
+        Task { await self.applyPrivilegedWrite(index: index, requested: requested, targetRPM: targetRPM, generation: generation) }
     }
 
-    private func applyPrivilegedWrite(index: Int, requested: FanOverride, targetRPM: Double?) async {
+    private func applyPrivilegedWrite(index: Int, requested: FanOverride, targetRPM: Double?, generation: Int) async {
         let success = await PrivilegedFanWriter.write(index: index, targetRPM: targetRPM)
-        guard fanOverrides[index] == requested else { return }
+        // Сверяем номер заявки, не значение: более новая заявка (даже с тем
+        // же процентом) уже могла обновить `fanOverrides` и `fanRequestGeneration`
+        // к моменту, когда этот, более старый, ответ пришёл — тогда он не
+        // должен ничего трогать, что бы он ни принёс.
+        guard fanRequestGeneration[index] == generation else { return }
         if !success {
             fanOverrides[index] = .auto
             patchFanOverride(index: index, override: .auto)
@@ -335,15 +349,34 @@ final class MetricsService: ObservableObject {
     /// который его выставил: иначе обороты застынут там, где их
     /// оставили, даже когда машина остынет.
     ///
-    /// Запись привилегированная и асинхронная (см. `setFanOverride`) —
-    /// на выходе из приложения ждать её нечем и незачем: лучший случай,
-    /// который здесь возможен, — пароль ещё не истёк из кэша Authorization
-    /// Services и запрос успевает уйти до того, как процесс исчезнет.
+    /// Запись привилегированная и асинхронная (см. `setFanOverride`), но
+    /// здесь дожидаемся её синхронно — `AppDelegate` вызывает
+    /// `PrivilegedFanWriter.shutdown()` сразу следующей строкой, а тот
+    /// останавливает демон немедленно. Без ожидания эти заявки на возврат
+    /// автоматики почти всегда проигрывали бы гонку с остановкой демона:
+    /// `Task { }`, унаследовавший MainActor, не успел бы даже встать
+    /// в очередь `FanDaemonSession` до того, как её обнулит teardown,
+    /// и следующая попытка писать нашла бы демон не запущенным — пришлось
+    /// бы поднимать новый под свежий пароль администратора уже во время
+    /// выхода из приложения, что практически никогда не успевает.
+    /// `Task.detached` — по той же причине, что и в `ClipboardService.flushSync`:
+    /// обычная `Task` унаследовала бы MainActor и не смогла бы выполниться,
+    /// пока этот же метод синхронно блокирует его семафором.
     func revertAllFanOverrides() {
-        for index in fanOverrides.keys where fanOverrides[index] != .auto {
-            Task { await PrivilegedFanWriter.write(index: index, targetRPM: nil) }
-        }
+        let indices = fanOverrides.compactMap { $0.value != .auto ? $0.key : nil }
         fanOverrides.removeAll()
+        guard !indices.isEmpty else { return }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached {
+            await withTaskGroup(of: Void.self) { group in
+                for index in indices {
+                    group.addTask { _ = await PrivilegedFanWriter.write(index: index, targetRPM: nil) }
+                }
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 3)
     }
 
     /// Публичный запасной показатель: работает всегда, но без градусов.

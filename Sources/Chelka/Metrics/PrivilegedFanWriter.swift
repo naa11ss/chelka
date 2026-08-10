@@ -225,9 +225,31 @@ private final class FanDaemonSession: @unchecked Sendable {
         let flags = fcntl(cmdFD, F_GETFL, 0)
         _ = fcntl(cmdFD, F_SETFL, flags & ~O_NONBLOCK)
 
-        let respFD = open(respPath, O_RDONLY)
+        // По этому моменту `cmdFD >= 0` уже означает, что демон (уже под
+        // root) прошёл свой блокирующий `open(cmdPath, O_RDONLY)` и сам
+        // заблокирован в открытии `respPath` на запись — рандеву на второй
+        // трубе не зависит от первой. `process.terminate()` шлёт SIGTERM
+        // только обёртке `osascript`; реальный привилегированный процесс,
+        // поднятый через "with administrator privileges", таким сигналом
+        // не обязательно завершается и может остаться висеть в этом open()
+        // навсегда — трубу открывать больше некому, её директория вот-вот
+        // будет удалена. Несколько попыток (`EINTR` — не редкость) плюс,
+        // если они не помогли, открытие `respPath` только чтобы разблокировать
+        // демона и дать ему дойти до команды "quit" — надёжнее, чем разово
+        // сдаться и остаться с осиротевшим root-процессом.
+        var respFD: Int32 = -1
+        for _ in 0..<3 {
+            respFD = open(respPath, O_RDONLY)
+            if respFD >= 0 { break }
+        }
         guard respFD >= 0 else {
-            close(cmdFD)
+            let rescueFD = open(respPath, O_RDONLY)
+            if rescueFD >= 0 {
+                try? FileHandle(fileDescriptor: cmdFD, closeOnDealloc: true).write(contentsOf: Data("quit\n".utf8))
+                close(rescueFD)
+            } else {
+                close(cmdFD)
+            }
             process.terminate()
             try? FileManager.default.removeItem(at: dir)
             return false

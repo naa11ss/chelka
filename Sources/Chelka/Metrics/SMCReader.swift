@@ -136,6 +136,15 @@ final class SMCReader {
 
         let modeWritten = writeUInt8("F\(index)Md", value: 1)
         let targetWritten = writeTargetRPM("F\(index)Tg", rpm: targetRPM)
+
+        // Режим переключился на ручной, а целевые обороты — нет: вентилятор
+        // остался бы в ручном режиме на каком-то чужом или прежнем значении
+        // `F{i}Tg`, а не на том, что запросил пользователь. Откатываем режим
+        // назад — молчаливый частичный успех хуже честного отказа.
+        if modeWritten && !targetWritten {
+            _ = writeUInt8("F\(index)Md", value: 0)
+        }
+
         return modeWritten && targetWritten
     }
 
