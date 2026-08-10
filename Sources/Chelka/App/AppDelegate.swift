@@ -3,6 +3,7 @@ import ChelkaCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var themeController: ThemeController!
+    private var widgetSizeController: WidgetSizeController!
     private var clipboardService: ClipboardService!
     private var metricsService: MetricsService!
     private var musicService: MusicService!
@@ -15,12 +16,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.app.info("Chelka запущена, версия \(AppInfo.versionString, privacy: .public)")
 
         themeController = ThemeController()
+        widgetSizeController = WidgetSizeController()
         clipboardService = ClipboardService()
         metricsService = MetricsService()
         // Настройки общие: разрешение ходить в сеть за обложкой лежит там же.
         musicService = MusicService(settings: clipboardService.settings)
         notchController = NotchController(
             theme: themeController,
+            widgetSize: widgetSizeController,
             clipboard: clipboardService,
             metrics: metricsService,
             music: musicService
@@ -28,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissionsService = PermissionsService(clipboard: clipboardService, music: musicService)
         settingsWindow = SettingsWindowController(
             theme: themeController,
+            widgetSize: widgetSizeController,
             clipboard: clipboardService,
             permissions: permissionsService
         )
@@ -69,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 SettingsDemo.run(
                     window: self.settingsWindow,
                     theme: self.themeController,
+                    widgetSize: self.widgetSizeController,
                     clipboard: self.clipboardService,
                     permissions: self.permissionsService
                 )

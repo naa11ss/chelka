@@ -13,11 +13,18 @@ final class SettingsWindowController {
     private var didBecomeKeyObserver: NSObjectProtocol?
 
     private let theme: ThemeController
+    private let widgetSize: WidgetSizeController
     private let clipboard: ClipboardService
     private let permissions: PermissionsService
 
-    init(theme: ThemeController, clipboard: ClipboardService, permissions: PermissionsService) {
+    init(
+        theme: ThemeController,
+        widgetSize: WidgetSizeController,
+        clipboard: ClipboardService,
+        permissions: PermissionsService
+    ) {
         self.theme = theme
+        self.widgetSize = widgetSize
         self.clipboard = clipboard
         self.permissions = permissions
     }
@@ -37,7 +44,7 @@ final class SettingsWindowController {
             return
         }
 
-        let view = SettingsView(theme: theme, clipboard: clipboard, permissions: permissions)
+        let view = SettingsView(theme: theme, widgetSize: widgetSize, clipboard: clipboard, permissions: permissions)
         let hosting = NSHostingController(rootView: view)
 
         let window = NSWindow(contentViewController: hosting)

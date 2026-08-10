@@ -5,12 +5,13 @@ import ChelkaCore
 /// Окно настроек.
 struct SettingsView: View {
     @ObservedObject var theme: ThemeController
+    @ObservedObject var widgetSize: WidgetSizeController
     @ObservedObject var clipboard: ClipboardService
     @ObservedObject var permissions: PermissionsService
 
     var body: some View {
         TabView {
-            GeneralSettings(theme: theme)
+            GeneralSettings(theme: theme, widgetSize: widgetSize)
                 .tabItem { Label(T("settings.tab.general", "Основные"), systemImage: "gearshape") }
 
             ClipboardSettingsView(clipboard: clipboard)
@@ -30,6 +31,7 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     @ObservedObject var theme: ThemeController
+    @ObservedObject var widgetSize: WidgetSizeController
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchError: String?
 
@@ -41,6 +43,22 @@ private struct GeneralSettings: View {
                 }
             }
             .pickerStyle(.segmented)
+
+            LabeledContent(T("settings.widgetSize", "Размер виджета:")) {
+                HStack(spacing: 8) {
+                    Slider(value: sizeBinding, in: WidgetSizeController.range)
+                    Text(sizePercentText)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Button(T("settings.widgetSize.reset", "Сбросить")) { widgetSize.reset() }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
+            }
+            Text(T("settings.widgetSize.hint", "Меняет только размер виджета. Шрифт остаётся тем же — он и так на грани читаемости."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Toggle(T("settings.launchAtLogin", "Запускать при входе в систему"), isOn: launchBinding)
 
@@ -66,6 +84,14 @@ private struct GeneralSettings: View {
 
     private var themeBinding: Binding<AppTheme> {
         Binding(get: { theme.theme }, set: { theme.set($0) })
+    }
+
+    private var sizeBinding: Binding<Double> {
+        Binding(get: { widgetSize.scale }, set: { widgetSize.set($0) })
+    }
+
+    private var sizePercentText: String {
+        "\(Int((widgetSize.scale * 100).rounded()))%"
     }
 
     private var launchBinding: Binding<Bool> {

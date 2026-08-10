@@ -11,6 +11,7 @@ import ChelkaCore
 @MainActor
 final class NotchController {
     private let theme: ThemeController
+    private let widgetSize: WidgetSizeController
     private let hoverMonitor = HoverMonitor()
     private var mouseButtonMonitor: Any?
 
@@ -77,16 +78,18 @@ final class NotchController {
 
     init(
         theme: ThemeController,
+        widgetSize: WidgetSizeController,
         clipboard: ClipboardService,
         metrics: MetricsService,
         music: MusicService
     ) {
         self.theme = theme
+        self.widgetSize = widgetSize
         self.clipboard = clipboard
         self.metrics = metrics
         self.music = music
-        let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
-        self.layout = NotchGeometry.layout(for: metrics)
+        let screenMetrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
+        self.layout = NotchGeometry.layout(for: screenMetrics, metrics: widgetSize.metrics)
         self.viewModel = NotchViewModel(layout: layout)
     }
 
@@ -138,6 +141,11 @@ final class NotchController {
         theme.$theme
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.applyTheme() }
+            .store(in: &cancellables)
+
+        widgetSize.$scale
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildForSizeChange() }
             .store(in: &cancellables)
 
         // Курсор может уже стоять на вырезе к моменту запуска — событий движения
@@ -363,8 +371,21 @@ final class NotchController {
     var panelIgnoresMouseEvents: Bool { panel?.ignoresMouseEvents ?? true }
 
     private func computeLayout() -> NotchLayout {
-        let metrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
-        return NotchGeometry.layout(for: metrics, anchor: anchorProvider())
+        let screenMetrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
+        return NotchGeometry.layout(for: screenMetrics, metrics: widgetSize.metrics, anchor: anchorProvider())
+    }
+
+    /// Пользователь подвинул ползунок размера в настройках — пересобираем
+    /// раскладку немедленно, тем же путём, что при смене экранов, только
+    /// без дебаунса: это разовое действие, а не пачка системных уведомлений.
+    private func rebuildForSizeChange() {
+        let newLayout = computeLayout()
+        guard newLayout != layout else { return }
+
+        layout = newLayout
+        applyLayoutToPanel()
+        applyState(animated: true)
+        panel?.orderFrontRegardless()
     }
 
     /// Значок в меню-баре ездит, когда соседи появляются и исчезают.

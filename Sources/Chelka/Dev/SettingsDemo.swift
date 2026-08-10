@@ -12,6 +12,7 @@ enum SettingsDemo {
     static func run(
         window: SettingsWindowController,
         theme: ThemeController,
+        widgetSize: WidgetSizeController,
         clipboard: ClipboardService,
         permissions: PermissionsService
     ) {
@@ -46,6 +47,17 @@ enum SettingsDemo {
         let stored = UserDefaults.standard.string(forKey: "chelka.theme")
         check("выбор темы уходит в настройки", stored == "light", detail: stored ?? "нет")
         theme.set(original)
+
+        // Размер виджета сохраняется между запусками и остаётся в границах.
+        let originalScale = widgetSize.scale
+        widgetSize.set(1.15)
+        settle(0.2)
+        let storedScale = UserDefaults.standard.object(forKey: "chelka.widgetScale") as? Double
+        check("размер виджета уходит в настройки", storedScale == 1.15, detail: storedScale.map { "\($0)" } ?? "нет")
+        widgetSize.set(5.0)
+        check("значение вне диапазона обрезается", widgetSize.scale == WidgetSizeController.range.upperBound,
+              detail: "\(widgetSize.scale)")
+        widgetSize.set(originalScale)
 
         // Переключатели буфера.
         let originalScreenshots = clipboard.settings.captureScreenshots
