@@ -322,12 +322,22 @@ final class NotchController {
     private func isCursorOverWidget(_ point: NSPoint) -> Bool {
         switch stateMachine.state {
         case .expanded:
-            return layout.expandedRectScreen.contains(point)
+            return visibleExpandedRectScreen.contains(point)
         case .collapsed:
             // Свёрнутый виджет на экране с вырезом не нарисован вовсе,
             // на экране без выреза — кругляш, но и он открывается наведением.
             return false
         }
+    }
+
+    /// `NotchRootView.surfaceRect` рисует раскрытую поверхность шире
+    /// `expandedRectScreen` на `DS.flare` по горизонтали — под скруглённые
+    /// "уши" виджета. Без этого поправки курсор, ушедший за узкий
+    /// `expandedRectScreen`, но всё ещё над нарисованным телом виджета,
+    /// сворачивал бы его раньше времени — видимая граница и та, что решает
+    /// «внутри/снаружи», не совпадали.
+    private var visibleExpandedRectScreen: CGRect {
+        layout.expandedRectScreen.insetBy(dx: -DS.flare, dy: 0)
     }
 
     private func applyTheme() {
@@ -395,7 +405,7 @@ final class NotchController {
     /// иначе курсор, спустившийся к содержимому, сворачивал бы его.
     private func isCursorInside(_ point: NSPoint) -> Bool {
         if stateMachine.state == .expanded {
-            return layout.hoverRectScreen.contains(point) || layout.expandedRectScreen.contains(point)
+            return layout.hoverRectScreen.contains(point) || visibleExpandedRectScreen.contains(point)
         }
         return layout.hoverRectScreen.contains(point)
     }
