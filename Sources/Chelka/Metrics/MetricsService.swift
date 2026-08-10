@@ -1,6 +1,8 @@
 import AppKit
 import Combine
 import Darwin
+import SwiftUI
+@preconcurrency import UserNotifications
 import ChelkaCore
 
 /// Снимает загрузку процессора, память и температуру.
@@ -32,6 +34,16 @@ final class MetricsService: ObservableObject {
     /// или ручной процент. Живёт до explicit смены пользователем или
     /// до выхода из приложения — сворачивание виджета его не сбрасывает.
     private var fanOverrides: [Int: FanOverride] = [:]
+
+    /// Разрешён 0% на регуляторе — страховку от «выключил и забыл» несёт
+    /// не сам регулятор, а этот сервис: предупреждает уведомлением, когда
+    /// температура растёт при активном ручном режиме, но не отбирает
+    /// у пользователя выбор молча — решение вернуть автоматику остаётся за ним.
+    private static let overheatThreshold: Double = 90
+    /// Гистерезис против дребезга: без него уведомление могло бы уйти
+    /// заново на каждом тике, пока температура колеблется около порога.
+    private static let overheatResetMargin: Double = 5
+    private var hasWarnedOverheat = false
 
     var isSampling: Bool { timer != nil }
 
@@ -86,13 +98,66 @@ final class MetricsService: ObservableObject {
         // была бы заметна.
         let fans = readFans()
 
-        snapshot = SystemMetricsSnapshot(
-            cpuPercent: cpuPercent ?? snapshot.cpuPercent,
-            memory: readMemory(),
-            temperatureCelsius: lastTemperature,
-            thermalPressure: currentThermalPressure(),
-            fans: fans
+        // Плавный переход между показаниями вместо мгновенной подмены —
+        // числа и полоски в карточке едут к новому значению, а не дёргаются.
+        withAnimation(.easeOut(duration: 0.4)) {
+            snapshot = SystemMetricsSnapshot(
+                cpuPercent: cpuPercent ?? snapshot.cpuPercent,
+                memory: readMemory(),
+                temperatureCelsius: lastTemperature,
+                thermalPressure: currentThermalPressure(),
+                fans: fans
+            )
+        }
+
+        checkOverheatSafety(temperature: lastTemperature, fans: fans)
+    }
+
+    // MARK: - Страховка от перегрева
+
+    /// Регулятор разрешает 0% — если температура при этом растёт, дело
+    /// пользователя решать, вернуть ли автоматику, но узнать об этом он
+    /// должен сразу, а не когда почувствует запах или машина сама уйдёт
+    /// в тепловую защиту.
+    private func checkOverheatSafety(temperature: Double?, fans: [FanSpeed]) {
+        guard let temperature else { return }
+        let hasManualOverride = fans.contains {
+            if case .percent = $0.override { return true }
+            return false
+        }
+
+        guard hasManualOverride else {
+            hasWarnedOverheat = false
+            return
+        }
+
+        if temperature >= Self.overheatThreshold {
+            guard !hasWarnedOverheat else { return }
+            hasWarnedOverheat = true
+            postOverheatNotification(temperature: temperature)
+        } else if temperature < Self.overheatThreshold - Self.overheatResetMargin {
+            hasWarnedOverheat = false
+        }
+    }
+
+    private func postOverheatNotification(temperature: Double) {
+        let center = UNUserNotificationCenter.current()
+        let content = UNMutableNotificationContent()
+        content.title = T("fan.overheat.title", "Температура повышена")
+        content.body = String(
+            format: T("fan.overheat.body", "%.0f °C при вентиляторе в ручном режиме. Проверьте регулятор — возможно, стоит вернуть автоматику."),
+            temperature
         )
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "chelka.fan.overheat", content: content, trigger: nil)
+
+        // Разрешение может быть ещё не запрошено — просим его здесь же,
+        // а не заранее при каждом запуске: до первого ручного управления
+        // вентилятором оно попросту не нужно.
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            center.add(request)
+        }
     }
 
     // MARK: - Источники
@@ -146,6 +211,7 @@ final class MetricsService: ObservableObject {
             speculativePages: UInt64(stats.speculative_count),
             purgeablePages: UInt64(stats.purgeable_count),
             externalPages: UInt64(stats.external_page_count),
+            internalPages: UInt64(stats.internal_page_count),
             pageSize: UInt64(vm_kernel_page_size),
             totalBytes: ProcessInfo.processInfo.physicalMemory
         )
@@ -200,26 +266,67 @@ final class MetricsService: ObservableObject {
     /// которые сообщает сам вентилятор, программно перепрыгнуть через
     /// них нельзя даже в принципе: контроллер вентилятора сам обрежет
     /// по своему пределу, что бы мы ни отправили.
-    @discardableResult
-    func setFanOverride(index: Int, percent: Int?) -> Bool {
+    ///
+    /// Сама запись — привилегированная (см. `PrivilegedFanWriter`) и может
+    /// растянуться на секунды, пока система ждёт пароль администратора,
+    /// поэтому ждать её на MainActor синхронно нельзя. UI обновляется
+    /// оптимистично сразу, а после завершения записи — по факту: если
+    /// пользователь успел подвинуть регулятор ещё раз, пока мы ждали
+    /// пароль, более старый ответ уже не должен затирать более новый.
+    func setFanOverride(index: Int, percent: Int?) {
         guard let limits = fanLimits[index] else {
             Log.metrics.error("нет паспортного диапазона для вентилятора \(index) — регулятор ещё не читал его")
-            return false
+            return
         }
 
-        if let percent {
-            let snapped = FanPercent.snap(percent)
-            let targetRPM = FanPercent.rpm(forPercent: snapped, minRPM: limits.min, maxRPM: limits.max)
-            let success = smcReader.setFanOverride(index: index, targetRPM: targetRPM)
+        let requested: FanOverride = percent.map { .percent(FanPercent.snap($0)) } ?? .auto
+        let targetRPM: Double? = percent.map { FanPercent.rpm(forPercent: FanPercent.snap($0), minRPM: limits.min, maxRPM: limits.max) }
+        fanOverrides[index] = requested
+        // `snapshot` иначе обновился бы только на следующем тике таймера
+        // (раз в 1.5 с) — до этого регулятор на мгновение показывал бы
+        // старое значение поверх уже отпущенного пальца: выглядит как
+        // «прыгнул назад к прошлому проценту, потом сам доехал до нужного».
+        patchFanOverride(index: index, override: requested)
 
-            fanOverrides[index] = success ? .percent(snapped) : .auto
-            Log.metrics.info("вентилятор \(index): запрошено \(snapped)% (\(Int(targetRPM)) об/мин), \(success ? "принято" : "отклонено")")
-            return success
-        } else {
-            let success = smcReader.setFanOverride(index: index, targetRPM: nil)
+        Task { await self.applyPrivilegedWrite(index: index, requested: requested, targetRPM: targetRPM) }
+    }
+
+    private func applyPrivilegedWrite(index: Int, requested: FanOverride, targetRPM: Double?) async {
+        let success = await PrivilegedFanWriter.write(index: index, targetRPM: targetRPM)
+        guard fanOverrides[index] == requested else { return }
+        if !success {
             fanOverrides[index] = .auto
-            Log.metrics.info("вентилятор \(index): возврат к автоматике, \(success ? "принято" : "отклонено")")
-            return success
+            patchFanOverride(index: index, override: .auto)
+        }
+
+        // Logger.info(_:) размечает интерполяцию сам (privacy-редактирование
+        // в системном логе) и не знает, как описать произвольный enum —
+        // без явного String тут была невнятная ошибка компиляции совсем в
+        // другом месте (на самом Task{}), а не на этой строке.
+        let requestedDescription = switch requested {
+        case .auto: "авто"
+        case .percent(let value): "\(value)%"
+        }
+        Log.metrics.info("вентилятор \(index): запрошено \(requestedDescription), \(success ? "принято" : "отклонено")")
+    }
+
+    /// Точечно правит override одного вентилятора в уже опубликованном
+    /// снапшоте — не дожидаясь следующего тика `sample()`, см. комментарий
+    /// в `setFanOverride`.
+    private func patchFanOverride(index: Int, override: FanOverride) {
+        guard let fanIndex = snapshot.fans.firstIndex(where: { $0.index == index }) else { return }
+        var fans = snapshot.fans
+        let old = fans[fanIndex]
+        fans[fanIndex] = FanSpeed(index: old.index, rpm: old.rpm, minRPM: old.minRPM, maxRPM: old.maxRPM, override: override)
+
+        withAnimation(.easeOut(duration: 0.3)) {
+            snapshot = SystemMetricsSnapshot(
+                cpuPercent: snapshot.cpuPercent,
+                memory: snapshot.memory,
+                temperatureCelsius: snapshot.temperatureCelsius,
+                thermalPressure: snapshot.thermalPressure,
+                fans: fans
+            )
         }
     }
 
@@ -227,9 +334,14 @@ final class MetricsService: ObservableObject {
     /// из приложения — ручной режим не должен пережить сам процесс,
     /// который его выставил: иначе обороты застынут там, где их
     /// оставили, даже когда машина остынет.
+    ///
+    /// Запись привилегированная и асинхронная (см. `setFanOverride`) —
+    /// на выходе из приложения ждать её нечем и незачем: лучший случай,
+    /// который здесь возможен, — пароль ещё не истёк из кэша Authorization
+    /// Services и запрос успевает уйти до того, как процесс исчезнет.
     func revertAllFanOverrides() {
         for index in fanOverrides.keys where fanOverrides[index] != .auto {
-            smcReader.setFanOverride(index: index, targetRPM: nil)
+            Task { await PrivilegedFanWriter.write(index: index, targetRPM: nil) }
         }
         fanOverrides.removeAll()
     }

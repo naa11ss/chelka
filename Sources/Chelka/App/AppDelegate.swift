@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // его выставил — иначе обороты застынут там, где их оставили,
         // даже когда машина остынет.
         metricsService?.revertAllFanOverrides()
+        PrivilegedFanWriter.shutdown()
         clipboardService?.stop()
         musicService?.stop()
         notchController?.stop()
