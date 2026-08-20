@@ -27,7 +27,19 @@ final class SMCReader {
         if connection != 0 { IOServiceClose(connection) }
     }
 
+    /// Раньше вызывался ровно один раз, из `init()` — если `AppleSMC` в
+    /// этот момент ещё не был готов (на реальном железе замечена гонка:
+    /// приложение, запущенное автозапуском при входе в систему, стартует
+    /// раньше, чем IOKit-сервисы гарантированно поднялись), `isAvailable`
+    /// оставался `false` до конца сессии виджета — регулятор вентилятора
+    /// пропадал целиком без какого-либо сообщения, до ручного перезапуска
+    /// приложения. Метод сам по себе безопасно вызывать повторно (не
+    /// делает ничего, если соединение уже есть) — самолечение на низком
+    /// уровне (`readRawBytes`/`writeBytes`) даёт это почти бесплатно, раз
+    /// опрос и так идёт каждые 1.5с, пока виджет раскрыт.
     private func connect() {
+        guard connection == 0 else { return }
+
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
         guard service != 0 else {
             Log.metrics.debug("SMC: сервис AppleSMC не найден")
@@ -62,6 +74,7 @@ final class SMCReader {
     // MARK: - Публичное чтение
 
     func readTemperatures() -> [TemperatureReading] {
+        if !isAvailable { connect() }
         guard isAvailable else { return [] }
 
         var readings: [TemperatureReading] = []
@@ -84,6 +97,7 @@ final class SMCReader {
 
     /// Сколько вентиляторов видит SMC. 0 у Air и безвентиляторных Mac mini.
     func fanCount() -> Int {
+        if !isAvailable { connect() }
         guard isAvailable else { return 0 }
         guard let count = readIntValue(Self.fanCountKey), count > 0, count <= 8 else { return 0 }
         return count
@@ -128,6 +142,7 @@ final class SMCReader {
     /// обрезаем на нашей стороне — не полагаемся только на защиту дальше.
     @discardableResult
     func setFanOverride(index: Int, targetRPM: Double?) -> Bool {
+        if !isAvailable { connect() }
         guard isAvailable else { return false }
 
         guard let targetRPM else {
@@ -325,6 +340,7 @@ final class SMCReader {
     /// (`kSMCReadKeyInfo`), потом само значение (`kSMCReadBytes`) —
     /// без размера из первого шага байты второго не разобрать.
     private func readRawBytes(_ key: String) -> RawValue? {
+        if connection == 0 { connect() }
         guard connection != 0 else { return nil }
 
         var infoRequest = SMCParamStruct()
@@ -353,6 +369,7 @@ final class SMCReader {
     /// отправляет значение — размер обязан совпасть, иначе SMC отклонит
     /// запись тем же кодом ошибки, каким отвечает на неизвестный ключ.
     private func writeBytes(_ key: String, bytes: [UInt8]) -> Bool {
+        if connection == 0 { connect() }
         guard connection != 0 else { return false }
 
         var infoRequest = SMCParamStruct()
