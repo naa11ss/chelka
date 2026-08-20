@@ -19,14 +19,6 @@ struct FanControlRow: View {
     /// записью на каждый пиксель движения пальца.
     @State private var dragPercent: Int?
 
-    /// Возврат к автоматике тапом по цифре доступен не сразу после
-    /// движения регулятора — иначе смахнуть на нужный процент и тут же
-    /// случайно попасть по той же цифре означало бы отменить то, что
-    /// только что выставили.
-    @State private var canTapToAuto = false
-    @State private var autoAvailabilityWorkItem: DispatchWorkItem?
-    private static let autoAvailabilityDelay: TimeInterval = 10
-
     private static let minimumPercent = 0
 
     private var isOverridden: Bool {
@@ -86,20 +78,30 @@ struct FanControlRow: View {
             Text(isOverridden ? "\(displayPercent)%" : T("fan.auto", "Авто"))
                 .font(.system(size: 9, weight: .medium).monospacedDigit())
                 .foregroundStyle(Color.notchSecondary)
-                .frame(width: 30, alignment: .trailing)
+                .frame(width: 26, alignment: .trailing)
                 .contentTransition(.numericText())
                 // Во время перетаскивания цифра обязана идти в такт пальцу
                 // без задержки — анимация включается только на устоявшихся
                 // значениях, иначе живая протяжка ощущалась бы вязкой.
                 .animation(dragPercent == nil ? .easeOut(duration: 0.25) : nil, value: displayPercent)
-                // Тап по числу — самый быстрый путь назад к автоматике,
-                // без отдельной кнопки, отъедающей место в узкой карточке.
-                // Доступен не сразу после движения — см. `canTapToAuto`.
-                .onTapGesture {
-                    guard isOverridden, canTapToAuto else { return }
-                    dragPercent = nil
-                    onSetOverride(nil)
-                }
+
+            // Отдельная, всегда видимая и всегда нажимаемая кнопка — раньше
+            // возврат к автоматике был спрятан за тапом по самой цифре,
+            // да ещё с задержкой в 10с после последнего движения регулятора
+            // (чтобы не отменить случайным повторным тапом только что
+            // выставленное значение). На практике это ощущалось как «то
+            // появляется, то нет» — пользователь не мог предсказать, когда
+            // именно жест сработает. Раз это отдельная кнопка на своём
+            // месте, а не то же место, где только что тянули за трек,
+            // тот риск случайной отмены больше не о том же самом жесте —
+            // задержка не нужна.
+            Button(action: { onSetOverride(nil) }) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(isOverridden ? Color.notchSecondary : Color.notchTertiary.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .help(T("fan.auto", "Авто"))
         }
         .frame(height: 12)
     }
@@ -123,28 +125,16 @@ struct FanControlRow: View {
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)
                     .onChanged { value in
                         dragPercent = percent(atX: value.location.x, width: geometry.size.width)
-                        scheduleAutoAvailability()
                     }
                     .onEnded { value in
                         let percent = percent(atX: value.location.x, width: geometry.size.width)
                         onSetOverride(percent)
                         dragPercent = nil
-                        scheduleAutoAvailability()
                     }
             )
         }
         .frame(height: 5)
         .animation(dragPercent == nil ? .easeOut(duration: 0.15) : nil, value: displayPercent)
-    }
-
-    /// Тап по цифре снова начинает отсчёт: 10 секунд простоя регулятора
-    /// подряд, не 10 секунд с первого движения жеста.
-    private func scheduleAutoAvailability() {
-        autoAvailabilityWorkItem?.cancel()
-        canTapToAuto = false
-        let workItem = DispatchWorkItem { canTapToAuto = true }
-        autoAvailabilityWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.autoAvailabilityDelay, execute: workItem)
     }
 
     private func percent(atX x: CGFloat, width: CGFloat) -> Int {
