@@ -38,6 +38,13 @@
 	<string>Чтобы показывать сегодняшние встречи прямо в вырезе. Данные никуда не отправляются и остаются на этом Mac.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Чтобы показывать сегодняшние встречи прямо в вырезе. Данные никуда не отправляются и остаются на этом Mac.</string>
+	<!-- Тот же случай, что и с календарём: без ключа обращение к IOBluetooth
+	     не отказывает, а убивает приложение на месте (TCC, SIGABRT). -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Чтобы показать заряд наушников, когда вы их подключаете. Само подключение и звук виджет не трогает.</string>
+	<!-- Управление плеерами и чтение вкладки браузера идут через Apple Events. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Чтобы показывать текущий трек и переключать его в Music, Spotify и браузере.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License</string>
 	<key>NSSupportsAutomaticTermination</key>
