@@ -64,10 +64,16 @@ struct NotchRootView: View {
     /// а не пропадает без анимации.
     private var eventPill: some View {
         let anchor = model.layout.collapsedRectInSwiftUI
-        // На реальном вырезе он и задаёт ширину плашки. На экране без
-        // выреза свёрнутый вид — кругляш или совсем пусто, недостаточно
-        // широкий для дропдауна, поэтому плашка там не уже 230 pt.
-        let width = model.layout.kind == .hardware ? anchor.width : max(anchor.width, 230)
+        // На реальном вырезе он и задаёт ширину плашки — но с запасом
+        // по `DS.flare` на сторону: у физического выреза нижние углы
+        // слегка скруглены, а у плашки они прямые, и без запаса в этих
+        // скруглениях просвечивал бы фон между вырезом и плашкой. Запас
+        // прячет прямой угол плашки ПОД скруглением выреза — тот же приём,
+        // которым `surfaceRect` прячет "уши" раскрытого виджета.
+        // На экране без выреза свёрнутый вид — кругляш или совсем пусто,
+        // недостаточно широкий для дропдауна, поэтому плашка там не уже
+        // 230 pt и без запаса — скруглять там нечего.
+        let width = model.layout.kind == .hardware ? anchor.width + DS.flare : max(anchor.width, 230)
 
         return NotchEventPill(event: model.state == .collapsed ? events.current : nil)
             .frame(width: width)
