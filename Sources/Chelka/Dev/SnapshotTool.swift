@@ -86,6 +86,9 @@ enum SnapshotTool {
     /// Один общий сервис на все снимки: пересоздавать демо-данные
     /// для каждого кадра незачем.
     private static let demoClipboard = ClipboardService.makeDemo()
+    /// Отдельный домен настроек: снимки не должны показывать — и тем более
+    /// трогать — настоящую полку файлов пользователя.
+    private static let demoFiles = FileShelfService(defaults: UserDefaults(suiteName: "chelka.demo")!)
     private static let demoMetrics = MetricsService()
     private static let demoMusic = MusicService(settings: ClipboardSettings())
 
@@ -96,7 +99,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model, clipboard: demoClipboard, metrics: demoMetrics, music: demoMusic)
+            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic)
         }
 
         let hosting = NSHostingView(rootView: root)

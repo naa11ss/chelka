@@ -74,6 +74,7 @@ final class NotchController {
     var anchorProvider: () -> CGRect? = { nil }
 
     private let clipboard: ClipboardService
+    private let files: FileShelfService
     private let metrics: MetricsService
     private let music: MusicService
 
@@ -81,12 +82,14 @@ final class NotchController {
         theme: ThemeController,
         widgetSize: WidgetSizeController,
         clipboard: ClipboardService,
+        files: FileShelfService,
         metrics: MetricsService,
         music: MusicService
     ) {
         self.theme = theme
         self.widgetSize = widgetSize
         self.clipboard = clipboard
+        self.files = files
         self.metrics = metrics
         self.music = music
         let screenMetrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
@@ -323,7 +326,7 @@ final class NotchController {
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
 
-        let root = NotchRootView(model: viewModel, clipboard: clipboard, metrics: metrics, music: music)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]

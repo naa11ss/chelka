@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var themeController: ThemeController!
     private var widgetSizeController: WidgetSizeController!
     private var clipboardService: ClipboardService!
+    private var fileShelfService: FileShelfService!
     private var metricsService: MetricsService!
     private var musicService: MusicService!
     private var notchController: NotchController!
@@ -18,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themeController = ThemeController()
         widgetSizeController = WidgetSizeController()
         clipboardService = ClipboardService()
+        fileShelfService = FileShelfService()
         metricsService = MetricsService()
         // Настройки общие: разрешение ходить в сеть за обложкой лежит там же.
         musicService = MusicService(settings: clipboardService.settings)
@@ -25,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             theme: themeController,
             widgetSize: widgetSizeController,
             clipboard: clipboardService,
+            files: fileShelfService,
             metrics: metricsService,
             music: musicService
         )

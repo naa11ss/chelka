@@ -15,6 +15,7 @@
 "card.music" = "Music";
 "card.system" = "System";
 "card.clipboard" = "Clipboard";
+"card.files" = "Files";
 
 /* Music */
 "music.nothing" = "Nothing playing";
@@ -38,6 +39,13 @@
 
 /* Clipboard */
 "clipboard.empty" = "Copy something — it will show up here";
+
+/* File shelf */
+"files.empty" = "Drop files here — pick them up in another window";
+"files.drop.release" = "Release — the file lands on the shelf";
+"files.clear" = "Clear";
+"files.selected" = "Selected: %d";
+"files.remove" = "Take off the shelf";
 "clipboard.memoryOnly" = "memory only";
 "clipboard.pinnedShort" = "pinned";
 "clipboard.copied" = "Copied";

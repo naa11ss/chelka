@@ -6,6 +6,9 @@ import UniformTypeIdentifiers
 /// Лента истории буфера: закреплённые слева, дальше свежие.
 struct ClipboardPane: View {
     @ObservedObject var service: ClipboardService
+    /// Заголовок рисует сам `ShelfCard`, когда лента живёт вкладкой рядом
+    /// с полкой файлов: две строки заголовков подряд там были бы лишними.
+    var showsHeader: Bool = true
     /// Индекс записи, по которой только что кликнули — для отметки «скопировано».
     @State private var justCopied: UUID?
     /// Метка конкретного клика — двух кликов по одной и той же записи
@@ -15,7 +18,7 @@ struct ClipboardPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            header
+            if showsHeader { header }
 
             if service.history.items.isEmpty {
                 emptyState

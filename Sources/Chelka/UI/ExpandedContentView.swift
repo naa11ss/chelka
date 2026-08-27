@@ -3,11 +3,12 @@ import ChelkaCore
 
 /// Содержимое раскрытого виджета.
 ///
-/// Два ряда: сверху музыка и метрики, снизу лента буфера во всю ширину.
-/// Буфер — то, ради чего виджет открывают чаще всего, поэтому ему
+/// Два ряда: сверху музыка и метрики, снизу буфер и полка файлов во всю
+/// ширину. Это то, ради чего виджет открывают чаще всего, поэтому им
 /// отдана целая строка, а не треть.
 struct ExpandedContentView: View {
     @ObservedObject var clipboard: ClipboardService
+    @ObservedObject var files: FileShelfService
     @ObservedObject var metrics: MetricsService
     @ObservedObject var music: MusicService
 
@@ -25,14 +26,7 @@ struct ExpandedContentView: View {
             // больше места, чем занимают три обычных индикатора.
             .frame(minHeight: 78)
 
-            ClipboardPane(service: clipboard)
-                .padding(10)
-                .background(Color.notchCard, in: RoundedRectangle(cornerRadius: DS.cardRadius, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: DS.cardRadius, style: .continuous)
-                        .strokeBorder(Color.notchStroke, lineWidth: 1)
-                }
-                .frame(maxHeight: .infinity)
+            ShelfCard(clipboard: clipboard, files: files)
         }
     }
 }
