@@ -35,7 +35,72 @@ enum Diagnostics {
         }
 
         printSensors()
+        printBluetoothBattery()
         exit(0)
+    }
+
+    /// Что реестр IOKit сообщает о заряде подключённых устройств.
+    ///
+    /// Публичного API для «сколько осталось в левом наушнике» macOS не даёт:
+    /// у `IOPSCopyPowerSourcesInfo` есть только сводная строка, а раздельные
+    /// значения лежат в реестре под недокументированными ключами, и набор
+    /// этих ключей разнится по моделям и прошивкам. Писать чтение вслепую,
+    /// по именам из интернета, — ровно та ошибка, которая на Intel-SMC
+    /// стоила целого круга удалённой отладки: сначала смотрим, что реально
+    /// отдаёт железо, потом пишем код под увиденное.
+    private static func printBluetoothBattery() {
+        print("")
+        print("Заряд подключённых устройств (реестр IOKit):")
+
+        var found = 0
+        for service in registryServices(matching: "AppleDeviceManagementHIDEventService") {
+            defer { IOObjectRelease(service) }
+
+            var properties: Unmanaged<CFMutableDictionary>?
+            guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+                  let dictionary = properties?.takeRetainedValue() as? [String: Any]
+            else { continue }
+
+            // Показываем всё, что похоже на заряд, вместе с именем устройства —
+            // не угадывая заранее, какие именно ключи тут окажутся.
+            let batteryKeys = dictionary.keys.filter { $0.localizedCaseInsensitiveContains("battery") }.sorted()
+            guard !batteryKeys.isEmpty else { continue }
+
+            found += 1
+            let name = dictionary["Product"] as? String
+                ?? dictionary["BD_ADDR"].map { "\($0)" }
+                ?? "без имени"
+            print("    \(name)")
+            for key in batteryKeys {
+                print("        \(key) = \(dictionary[key] ?? "nil")")
+            }
+        }
+
+        if found == 0 {
+            print("    ничего не найдено — подключите наушники и запустите снова")
+        }
+
+        // Сводка от публичного API — для сравнения с тем, что выше.
+        if let power = SystemEventMonitor.currentPowerState() {
+            let source = power.isPlugged ? "от сети" : "от батареи"
+            let note = power.hasBattery ? "" : ", встроенной батареи нет"
+            print("")
+            print("Питание Mac (публичный IOPS): \(power.percent)%, \(source)\(note)")
+        }
+    }
+
+    /// Перебор служб реестра по имени класса.
+    private static func registryServices(matching className: String) -> [io_service_t] {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(className), &iterator) == KERN_SUCCESS
+        else { return [] }
+        defer { IOObjectRelease(iterator) }
+
+        var services: [io_service_t] = []
+        while case let service = IOIteratorNext(iterator), service != 0 {
+            services.append(service)
+        }
+        return services
     }
 
     private static func printSensors() {
