@@ -61,30 +61,22 @@ struct NotchRootView: View {
         if model.state == .collapsed, let event = events.current {
             let anchor = model.layout.collapsedRectInSwiftUI
 
-            HStack(spacing: 5) {
-                Image(systemName: event.symbol)
-                    .font(.system(size: 9, weight: .semibold))
-                Text(event.title)
-                    .font(.system(size: 10, weight: .medium))
-                if let detail = event.detail {
-                    Text(detail)
-                        .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(Color.notchPrimary)
-                }
-            }
-            .foregroundStyle(Color.notchSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.notchSurface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.notchStroke, lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
-            .fixedSize()
-            // По центру выреза и чуть ниже него — в пустую середину
-            // меню-бара, ту же, куда свисает зона наведения.
-            .frame(width: model.layout.panelFrame.width, alignment: .center)
-            .offset(y: anchor.maxY + 6)
-            .transition(.move(edge: .top).combined(with: .opacity))
-            .animation(NotchAnimation.morph, value: event.id)
+            NotchEventPill(event: event)
+                // По центру выреза и чуть ниже него — в пустую середину
+                // меню-бара, ту же, куда свисает зона наведения.
+                .frame(width: model.layout.panelFrame.width, alignment: .center)
+                .offset(y: anchor.maxY + 6)
+                // Выезжает из-под выреза, как будто вырез её и выдал:
+                // движение сверху плюс лёгкое «раздувание» на пружине.
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .top)
+                            .combined(with: .opacity)
+                            .combined(with: .scale(scale: 0.82, anchor: .top)),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    )
+                )
+                .animation(.spring(response: 0.42, dampingFraction: 0.68), value: event.id)
         }
     }
 

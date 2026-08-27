@@ -26,6 +26,7 @@ final class SystemEventMonitor: ObservableObject {
 
     private var powerSource: CFRunLoopSource?
     private let pathMonitor = NWPathMonitor()
+    private let bluetooth = BluetoothConnectionWatcher()
     private var isRunning = false
 
     func start() {
@@ -34,6 +35,7 @@ final class SystemEventMonitor: ObservableObject {
 
         startPowerWatch()
         startNetworkWatch()
+        startDeviceWatch()
 
         Log.app.debug("монитор событий запущен")
     }
@@ -47,8 +49,42 @@ final class SystemEventMonitor: ObservableObject {
             self.powerSource = nil
         }
         pathMonitor.cancel()
+        bluetooth.stop()
         hideWorkItem?.cancel()
         current = nil
+    }
+
+    // MARK: - Подключение устройств
+
+    /// Опрашивать `system_profiler` по таймеру круглые сутки ради наушников
+    /// нельзя — запуск процесса стоит секунду с лишним. Поэтому идём за
+    /// раскладом заряда только когда система сама сказала, что что-то
+    /// подключилось.
+    private func startDeviceWatch() {
+        // Первый список запоминается молча, чтобы уже подключённые
+        // устройства не породили плашку при запуске приложения.
+        readDevices(announce: false)
+
+        bluetooth.onConnect = { [weak self] in
+            // Заряд появляется в system_profiler не мгновенно: сразу после
+            // подключения устройство ещё успевает договориться с системой.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                MainActor.assumeIsolated { self?.readDevices(announce: true) }
+            }
+        }
+        bluetooth.start()
+    }
+
+    private func readDevices(announce: Bool) {
+        Task.detached(priority: .utility) {
+            let devices = DeviceBatteryReader.readNow()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard let event = self.rules.onDevices(devices, now: MonotonicClock.now) else { return }
+                guard announce else { return }
+                self.show(event)
+            }
+        }
     }
 
     // MARK: - Питание

@@ -7,6 +7,16 @@ public struct SystemEvent: Sendable, Equatable, Identifiable {
         case battery
         case power
         case network
+        case device
+    }
+
+    /// Смысл цвета, а не сам цвет: `ChelkaCore` не знает про SwiftUI,
+    /// перевод в краску — дело интерфейса.
+    public enum Tint: Sendable, Equatable {
+        case neutral
+        case positive
+        case warning
+        case danger
     }
 
     public let id: UUID
@@ -16,6 +26,10 @@ public struct SystemEvent: Sendable, Equatable, Identifiable {
     public let title: String
     /// Правая часть строки: процент, имя сети. `nil` — сообщение и так целое.
     public let detail: String?
+    public let tint: Tint
+    /// Уровень 0…1 для шкалы под текстом — заряд батареи или наушников.
+    /// `nil` — шкалы нет, событию нечего ей показать.
+    public let level: Double?
     public let occurredAt: TimeInterval
 
     public init(
@@ -24,6 +38,8 @@ public struct SystemEvent: Sendable, Equatable, Identifiable {
         symbol: String,
         title: String,
         detail: String? = nil,
+        tint: Tint = .neutral,
+        level: Double? = nil,
         occurredAt: TimeInterval
     ) {
         self.id = id
@@ -31,6 +47,8 @@ public struct SystemEvent: Sendable, Equatable, Identifiable {
         self.symbol = symbol
         self.title = title
         self.detail = detail
+        self.tint = tint
+        self.level = level
         self.occurredAt = occurredAt
     }
 }
@@ -85,6 +103,8 @@ public struct SystemEventRules: Sendable, Equatable {
                     ? T("event.power.plugged", "Зарядка")
                     : T("event.power.unplugged", "От батареи"),
                 detail: "\(state.percent)%",
+                tint: state.isPlugged ? .positive : .neutral,
+                level: Double(state.percent) / 100,
                 occurredAt: now
             )
         }
@@ -104,6 +124,8 @@ public struct SystemEventRules: Sendable, Equatable {
             symbol: crossed <= 10 ? "battery.25" : "battery.50",
             title: T("event.battery.low", "Заряд на исходе"),
             detail: "\(state.percent)%",
+            tint: crossed <= 10 ? .danger : .warning,
+            level: Double(state.percent) / 100,
             occurredAt: now
         )
     }
@@ -123,6 +145,38 @@ public struct SystemEventRules: Sendable, Equatable {
                 ? T("event.network.online", "Сеть есть")
                 : T("event.network.offline", "Нет сети"),
             detail: isOnline ? interface : nil,
+            tint: isOnline ? .positive : .warning,
+            occurredAt: now
+        )
+    }
+
+    private var knownDevices: Set<String>?
+
+    /// Устройство подключилось — например, наушники. Первый список
+    /// запоминается молча: перечислять при запуске всё, что уже подключено,
+    /// значит показать плашку ни о чём.
+    public mutating func onDevices(_ devices: [DeviceBattery], now: TimeInterval) -> SystemEvent? {
+        let names = Set(devices.map(\.name))
+        defer { knownDevices = names }
+
+        guard let previous = knownDevices else { return nil }
+        guard let appeared = names.subtracting(previous).first,
+              let device = devices.first(where: { $0.name == appeared })
+        else { return nil }
+
+        // У наушников показываем меньший из наушников: именно он сядет
+        // первым, и именно он определяет, надолго ли их хватит.
+        let level = device.isEarbuds
+            ? [device.left, device.right].compactMap { $0 }.min()
+            : device.single
+
+        return SystemEvent(
+            kind: .device,
+            symbol: device.isEarbuds ? "airpods.gen3" : "battery.100",
+            title: device.name,
+            detail: level.map { "\($0)%" },
+            tint: .positive,
+            level: level.map { Double($0) / 100 },
             occurredAt: now
         )
     }

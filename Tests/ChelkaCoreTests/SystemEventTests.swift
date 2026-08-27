@@ -86,6 +86,45 @@ struct SystemEventTests {
         #expect(rules.onPower(desktop, now: 200) == nil)
     }
 
+    @Test("Первый список устройств запоминается молча")
+    func firstDeviceListIsSilent() {
+        var rules = SystemEventRules()
+        let airpods = DeviceBattery(name: "AirPods Pro", left: 90, right: 80, caseLevel: 50)
+        #expect(rules.onDevices([airpods], now: 100) == nil)
+    }
+
+    @Test("Новое устройство даёт событие с меньшим из наушников")
+    func newDeviceReportsLowestEarbud() {
+        var rules = SystemEventRules()
+        _ = rules.onDevices([], now: 100)
+
+        let airpods = DeviceBattery(name: "AirPods Pro", left: 90, right: 80, caseLevel: 50)
+        let event = rules.onDevices([airpods], now: 200)
+
+        #expect(event?.kind == .device)
+        #expect(event?.title == "AirPods Pro")
+        // Сядет первым правый — про него и говорим.
+        #expect(event?.detail == "80%")
+        #expect(event?.tint == .positive)
+    }
+
+    @Test("Уже известное устройство второй раз не объявляется")
+    func knownDeviceStaysSilent() {
+        var rules = SystemEventRules()
+        let mouse = DeviceBattery(name: "Magic Mouse", single: 70)
+        _ = rules.onDevices([], now: 100)
+        #expect(rules.onDevices([mouse], now: 200) != nil)
+        #expect(rules.onDevices([mouse], now: 300) == nil)
+    }
+
+    @Test("Отключение устройства событием не считается")
+    func disconnectIsSilent() {
+        var rules = SystemEventRules()
+        let mouse = DeviceBattery(name: "Magic Mouse", single: 70)
+        _ = rules.onDevices([mouse], now: 100)
+        #expect(rules.onDevices([], now: 200) == nil)
+    }
+
     @Test("Сеть сообщает только о смене состояния")
     func networkReportsOnlyChanges() {
         var rules = SystemEventRules()
