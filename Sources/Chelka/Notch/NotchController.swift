@@ -385,6 +385,13 @@ final class NotchController {
         // Иначе SwiftUI подкладывает непрозрачный фон и панель становится белым прямоугольником.
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        // Окно намеренно накрывает вырез и меню-бар, поэтому безопасная зона
+        // ему не нужна — а SwiftUI без этого сдвигает ВСЁ содержимое вниз
+        // ровно на её высоту (38 pt = высота выреза на этой модели). Измерено:
+        // плашка события, рассчитанная на y = 0, оказывалась ниже меню-бара
+        // целиком. `.ignoresSafeArea()` внутри вида это не побеждает — отступ
+        // приходит от самого хостинга, снимать надо здесь.
+        hosting.safeAreaRegions = []
 
         container.addSubview(hosting)
         panel.contentView = container
