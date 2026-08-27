@@ -48,6 +48,18 @@ final class NotchController {
 
     /// Тикает только пока есть отложенный переход. В покое таймеров нет.
     private var pendingTimer: Timer?
+
+    /// Пересчитывает пропуск кликов, пока виджет раскрыт.
+    ///
+    /// `HoverMonitor` знает о курсоре только из событий движения, а во время
+    /// перетаскивания файла из Finder система ведёт свой сеанс, и события
+    /// эти до нас могут не доходить вовсе. Тогда `ignoresMouseEvents`
+    /// остаётся с последнего известного положения — то есть «панель
+    /// прозрачна для мыши», — и до виджета не долетает не только клик,
+    /// но и перетаскивание: окно, прозрачное для мыши, не может быть
+    /// приёмником файла. Опрос `NSEvent.mouseLocation` работает независимо
+    /// от событий и это чинит.
+    private var passThroughPollTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var screenChangeDebounce: DispatchWorkItem?
 
@@ -189,6 +201,7 @@ final class NotchController {
         }
         pendingTimer?.invalidate()
         pendingTimer = nil
+        stopPassThroughPoll()
         screenChangeDebounce?.cancel()
         panel?.orderOut(nil)
     }
@@ -314,6 +327,27 @@ final class NotchController {
         closePinned()
     }
 
+    /// См. комментарий у `passThroughPollTimer`: пока виджет раскрыт,
+    /// состояние пропуска кликов пересчитывается по реальному положению
+    /// курсора, а не только по приходящим событиям движения.
+    private func startPassThroughPoll() {
+        guard passThroughPollTimer == nil else { return }
+
+        let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.updateMousePassThrough(for: self.cursorProvider())
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        passThroughPollTimer = timer
+    }
+
+    private func stopPassThroughPoll() {
+        passThroughPollTimer?.invalidate()
+        passThroughPollTimer = nil
+    }
+
     private func scheduleAutoClose() {
         pinnedAutoCloseTimer?.invalidate()
 
@@ -331,6 +365,15 @@ final class NotchController {
 
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
+
+        // Приём файлов — на уровне AppKit: SwiftUI-drop внутри хостинга
+        // в borderless nonactivatingPanel до вида проверенно не доходил.
+        container.onFileDrop = { [weak self] urls in
+            self?.files.add(urls: urls)
+        }
+        container.onDragTargetingChange = { [weak self] targeted in
+            self?.files.setDragTargeted(targeted)
+        }
 
         let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices, events: events)
         let hosting = NSHostingView(rootView: root)
@@ -543,10 +586,13 @@ final class NotchController {
             metrics.startSampling()
             music.startPolling()
             devices.startPolling()
+            startPassThroughPoll()
         } else {
             metrics.stopSampling()
             music.stopPolling()
             devices.stopPolling()
+            stopPassThroughPoll()
+            files.setDragTargeted(false)
             // Выбор записей не должен пережить сворачивание — иначе Delete/⌫
             // и Cmd+Z остаются глобально перехваченными для виджета, который
             // пользователь уже не видит и не собирался трогать.

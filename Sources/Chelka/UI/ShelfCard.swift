@@ -26,7 +26,9 @@ struct ShelfCard: View {
             case .clipboard:
                 ClipboardPane(service: clipboard, showsHeader: false)
             case .files:
-                FileShelfPane(service: files, isTargeted: isDropTargeted)
+                // Подсветка от любого из двух путей приёма: своего
+                // SwiftUI-drop и того, что приходит из AppKit-слоя.
+                FileShelfPane(service: files, isTargeted: isDropTargeted || files.isDragTargeted)
             }
         }
         .padding(10)
@@ -48,6 +50,17 @@ struct ShelfCard: View {
         }
         .onChange(of: isDropTargeted) { _, targeted in
             guard targeted, tab != .files else { return }
+            withAnimation(NotchAnimation.content) { tab = .files }
+        }
+        // Тот же переход, но по сигналу из AppKit-слоя: именно этот путь
+        // и работает, когда SwiftUI-drop до вида не доходит.
+        .onChange(of: files.isDragTargeted) { _, targeted in
+            guard targeted, tab != .files else { return }
+            withAnimation(NotchAnimation.content) { tab = .files }
+        }
+        .onChange(of: files.shelf.items.count) { previous, current in
+            // Файл долетел любым путём — показываем полку.
+            guard current > previous, tab != .files else { return }
             withAnimation(NotchAnimation.content) { tab = .files }
         }
     }

@@ -16,6 +16,16 @@ final class FileShelfService: ObservableObject {
     /// Записи, выбранные Cmd+кликом — для пакетного удаления и выноса.
     @Published private(set) var selectedIDs: Set<UUID> = []
 
+    /// Файл занесён над виджетом. Ставится из AppKit-слоя
+    /// (`PassThroughContentView`), читается интерфейсом: по нему карточка
+    /// переключается на вкладку «Файлы» и подсвечивает зону приёма.
+    @Published private(set) var isDragTargeted = false
+
+    func setDragTargeted(_ value: Bool) {
+        guard isDragTargeted != value else { return }
+        isDragTargeted = value
+    }
+
     private static let defaultsKey = "chelka.fileShelf"
 
     private let defaults: UserDefaults
