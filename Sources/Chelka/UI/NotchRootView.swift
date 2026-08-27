@@ -56,31 +56,22 @@ struct NotchRootView: View {
     ///
     /// Выпадает прямо под вырезом, шириной ровно в вырез — не отдельная
     /// табличка сбоку, а как будто сам вырез ненадолго вытянулся вниз
-    /// и показал, что хотел сказать. Пристыковать плашку сбоку к вырезу
-    /// не вышло: анимация раскрытия вбок читалась хуже, чем этот вариант,
-    /// и от неё отказались в пользу простоты.
-    @ViewBuilder
+    /// и показал, что хотел сказать.
+    ///
+    /// Смонтирована всегда (не только пока свёрнуто): `NotchEventPill` сама
+    /// решает, показываться ли, по значению `event`. Так раскрытие виджета
+    /// во время показа плашки тоже уезжает обратно в вырез тем же жестом,
+    /// а не пропадает без анимации.
     private var eventPill: some View {
-        if model.state == .collapsed, let event = events.current {
-            let anchor = model.layout.collapsedRectInSwiftUI
-            // На реальном вырезе он и задаёт ширину плашки. На экране без
-            // выреза свёрнутый вид — кругляш или совсем пусто, недостаточно
-            // широкий для дропдауна, поэтому плашка там не уже 230 pt.
-            let width = model.layout.kind == .hardware ? anchor.width : max(anchor.width, 230)
+        let anchor = model.layout.collapsedRectInSwiftUI
+        // На реальном вырезе он и задаёт ширину плашки. На экране без
+        // выреза свёрнутый вид — кругляш или совсем пусто, недостаточно
+        // широкий для дропдауна, поэтому плашка там не уже 230 pt.
+        let width = model.layout.kind == .hardware ? anchor.width : max(anchor.width, 230)
 
-            NotchEventPill(event: event)
-                .frame(width: width)
-                .offset(x: anchor.midX - width / 2, y: anchor.maxY)
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: .top)
-                            .combined(with: .opacity)
-                            .combined(with: .scale(scale: 0.85, anchor: .top)),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    )
-                )
-                .animation(.spring(response: 0.4, dampingFraction: 0.72), value: event.id)
-        }
+        return NotchEventPill(event: model.state == .collapsed ? events.current : nil)
+            .frame(width: width)
+            .offset(x: anchor.midX - width / 2, y: anchor.maxY)
     }
 
     // MARK: - Слои

@@ -11,6 +11,12 @@ import ChelkaCore
 @MainActor
 enum SnapshotTool {
 
+    /// `true` пока идёт офлайн-рендер снимков — читается видами, которым
+    /// нужно вести себя иначе без работающего display link (см.
+    /// `NotchEventPill.reveal`, где обычная `withAnimation` не долетает
+    /// до финального кадра в этом режиме).
+    static private(set) var isRendering = false
+
     struct Case {
         let name: String
         let metrics: ScreenMetrics
@@ -57,6 +63,8 @@ enum SnapshotTool {
     }
 
     static func run(outputDirectory: String) -> Never {
+        isRendering = true
+
         // Метрики снимаем настоящие: прочерки на снимках в документации
         // выглядят как неработающая функция.
         demoMetrics.startSampling(interval: 0.3)
@@ -122,7 +130,11 @@ enum SnapshotTool {
         hosting.frame = CGRect(origin: .zero, size: size)
         hosting.layoutSubtreeIfNeeded()
         // Один оборот цикла: SwiftUI успевает построить дерево слоёв
-        // до того, как мы снимаем растр.
+        // и выполнить синхронные onAppear-обработчики до того, как мы
+        // снимаем растр. Анимированные переходы снимка не дожидаются —
+        // виды, которым это важно, сами проверяют `SnapshotTool.isRendering`
+        // и в этом режиме проставляют финальное значение без анимации
+        // (см. `NotchEventPill.reveal`).
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
 
         guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return false }

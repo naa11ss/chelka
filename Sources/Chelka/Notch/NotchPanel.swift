@@ -51,4 +51,17 @@ final class NotchPanel: NSPanel {
     /// без этого borderless-панель не принимает нажатия клавиш.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// Без этой переопределённой версии `setFrame` молча ужимает окно
+    /// до `visibleFrame` экрана — то есть до области НИЖЕ меню-бара.
+    /// Найдено измерением: `CGWindowListCopyWindowInfo` показывал верх
+    /// окна на ~39pt ниже настоящего верха экрана, хотя `panel.setFrame`
+    /// вызывался с координатами, начинающимися ровно от него. AppKit
+    /// по умолчанию считает, что окно не должно перекрывать меню-бар,
+    /// и подгоняет любой запрошенный фрейм под это правило — панель
+    /// специально рисуется поверх меню-бара и выреза, так что правило
+    /// для нас вредно, а не защищает от чего-то.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
 }
