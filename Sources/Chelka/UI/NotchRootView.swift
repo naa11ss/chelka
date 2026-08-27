@@ -52,32 +52,59 @@ struct NotchRootView: View {
     /// Короткое сообщение под вырезом, пока виджет свёрнут.
     ///
     /// Только в свёрнутом виде: раскрытый виджет и так на экране, дублировать
-    /// в нём заряд и сеть незачем. Плашка рисуется по центру под вырезом,
-    /// а не по обе стороны от него: раскладывать содержимое вокруг
-    /// физического выреза значит привязаться к его ширине на конкретной
-    /// модели, а она разная (168 pt на Air, 209 pt на Pro).
+    /// в нём заряд и сеть незачем.
+    ///
+    /// На экране с вырезом плашка пристыкована к нему сбоку и прижата
+    /// к кромке экрана: тот же чёрный, та же высота, скруглён только
+    /// внешний нижний угол. Читается как «вырез раздался вбок и убрался
+    /// обратно», а не как всплывшая поверх окна табличка. На экранах без
+    /// выреза стыковаться не к чему — там прежняя капсула, но у самой
+    /// верхней кромки, а не в глубине экрана.
     @ViewBuilder
     private var eventPill: some View {
         if model.state == .collapsed, let event = events.current {
-            let anchor = model.layout.collapsedRectInSwiftUI
-
-            NotchEventPill(event: event)
-                // По центру выреза и чуть ниже него — в пустую середину
-                // меню-бара, ту же, куда свисает зона наведения.
-                .frame(width: model.layout.panelFrame.width, alignment: .center)
-                .offset(y: anchor.maxY + 6)
-                // Выезжает из-под выреза, как будто вырез её и выдал:
-                // движение сверху плюс лёгкое «раздувание» на пружине.
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: .top)
-                            .combined(with: .opacity)
-                            .combined(with: .scale(scale: 0.82, anchor: .top)),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    )
-                )
-                .animation(.spring(response: 0.42, dampingFraction: 0.68), value: event.id)
+            if model.layout.kind == .hardware {
+                attachedPill(event)
+            } else {
+                floatingPill(event)
+            }
         }
+    }
+
+    /// Растёт вправо от выреза: содержимое, спрятанное за самим вырезом,
+    /// увидеть всё равно нельзя, поэтому вбок, а не симметрично.
+    private func attachedPill(_ event: SystemEvent) -> some View {
+        let notch = model.layout.collapsedRectInSwiftUI
+
+        return NotchEventPill(event: event, attachedToNotch: true)
+            .frame(height: notch.height)
+            .offset(x: notch.maxX, y: notch.minY)
+            // Выезжает из-под выреза: раскрывается вбок от нулевой ширины,
+            // держась левым краем за вырез, — и так же уезжает обратно.
+            .transition(
+                .asymmetric(
+                    insertion: .scale(scale: 0.05, anchor: .leading).combined(with: .opacity),
+                    removal: .scale(scale: 0.05, anchor: .leading).combined(with: .opacity)
+                )
+            )
+            .animation(.spring(response: 0.4, dampingFraction: 0.75), value: event.id)
+    }
+
+    private func floatingPill(_ event: SystemEvent) -> some View {
+        NotchEventPill(event: event)
+            .frame(width: model.layout.panelFrame.width, alignment: .center)
+            // Вплотную к верхней кромке экрана: на экране без выреза
+            // меню-бар и есть верх, глубже забираться незачем.
+            .offset(y: 3)
+            .transition(
+                .asymmetric(
+                    insertion: .move(edge: .top)
+                        .combined(with: .opacity)
+                        .combined(with: .scale(scale: 0.82, anchor: .top)),
+                    removal: .move(edge: .top).combined(with: .opacity)
+                )
+            )
+            .animation(.spring(response: 0.42, dampingFraction: 0.68), value: event.id)
     }
 
     // MARK: - Слои
