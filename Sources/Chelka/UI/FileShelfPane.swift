@@ -6,9 +6,15 @@ import ChelkaCore
 struct FileShelfPane: View {
     @ObservedObject var service: FileShelfService
 
-    /// Курсор с файлами прямо сейчас над полкой — подсвечиваем, что отпустить
-    /// можно именно здесь.
-    @State private var isTargeted = false
+    /// Курсор с файлами прямо сейчас над карточкой — подсвечиваем, что
+    /// отпустить можно именно здесь.
+    ///
+    /// Сам приём файлов живёт этажом выше, в `ShelfCard`, и это не деталь
+    /// вкуса: пока drop-зона была здесь, она существовала только при
+    /// открытой вкладке «Файлы». Пользователь с зажатым файлом переключить
+    /// вкладку не может — клик занят перетаскиванием, — и файл, поднесённый
+    /// к виджету на вкладке «Буфер», просто некуда было отпустить.
+    let isTargeted: Bool
 
     var body: some View {
         Group {
@@ -19,10 +25,6 @@ struct FileShelfPane: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
-            load(providers)
-            return true
-        }
     }
 
     private var emptyState: some View {
@@ -88,30 +90,6 @@ struct FileShelfPane: View {
         .animation(NotchAnimation.content, value: isTargeted)
     }
 
-    /// `NSItemProvider` отдаёт адрес асинхронно — собираем все и кладём
-    /// на полку одним разом, чтобы порядок не зависел от того, кто из них
-    /// ответил первым.
-    private func load(_ providers: [NSItemProvider]) {
-        let group = DispatchGroup()
-        var urls: [URL] = []
-        let lock = NSLock()
-
-        for provider in providers {
-            group.enter()
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                if let url {
-                    lock.lock()
-                    urls.append(url)
-                    lock.unlock()
-                }
-                group.leave()
-            }
-        }
-
-        group.notify(queue: .main) {
-            service.add(urls: urls)
-        }
-    }
 }
 
 /// Одна карточка файла на полке.

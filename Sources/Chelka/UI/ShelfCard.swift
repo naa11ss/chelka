@@ -15,6 +15,8 @@ struct ShelfCard: View {
     }
 
     @State private var tab: Tab = .clipboard
+    /// Файл занесён над карточкой — неважно, какая вкладка открыта.
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -24,7 +26,7 @@ struct ShelfCard: View {
             case .clipboard:
                 ClipboardPane(service: clipboard, showsHeader: false)
             case .files:
-                FileShelfPane(service: files)
+                FileShelfPane(service: files, isTargeted: isDropTargeted)
             }
         }
         .padding(10)
@@ -34,6 +36,48 @@ struct ShelfCard: View {
                 .strokeBorder(Color.notchStroke, lineWidth: 1)
         }
         .frame(maxHeight: .infinity)
+        // Приём файлов — на всей карточке, а не внутри вкладки «Файлы».
+        // Пользователь с зажатым файлом не может переключить вкладку: клик
+        // занят самим перетаскиванием. Поэтому карточка принимает файл
+        // всегда, а на вкладку «Файлы» переходит сама, как только файл
+        // занесли — иначе поднесённый к виджету файл на вкладке «Буфер»
+        // просто некуда было отпустить.
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            load(providers)
+            return true
+        }
+        .onChange(of: isDropTargeted) { _, targeted in
+            guard targeted, tab != .files else { return }
+            withAnimation(NotchAnimation.content) { tab = .files }
+        }
+    }
+
+    /// `NSItemProvider` отдаёт адрес асинхронно — собираем все и кладём
+    /// на полку одним разом, чтобы порядок не зависел от того, кто из них
+    /// ответил первым.
+    private func load(_ providers: [NSItemProvider]) {
+        let group = DispatchGroup()
+        var urls: [URL] = []
+        let lock = NSLock()
+
+        for provider in providers {
+            group.enter()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url {
+                    lock.lock()
+                    urls.append(url)
+                    lock.unlock()
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            files.add(urls: urls)
+            // Файл долетел — показываем полку, даже если переключение по
+            // наведению почему-то не сработало.
+            withAnimation(NotchAnimation.content) { tab = .files }
+        }
     }
 
     private var tabBar: some View {
