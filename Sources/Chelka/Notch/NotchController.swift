@@ -90,6 +90,7 @@ final class NotchController {
     private let metrics: MetricsService
     private let music: MusicService
     private let devices: DeviceBatteryReader
+    private let calendar: CalendarService
     private let events: SystemEventMonitor
 
     init(
@@ -100,6 +101,7 @@ final class NotchController {
         metrics: MetricsService,
         music: MusicService,
         devices: DeviceBatteryReader,
+        calendar: CalendarService,
         events: SystemEventMonitor
     ) {
         self.theme = theme
@@ -109,6 +111,7 @@ final class NotchController {
         self.metrics = metrics
         self.music = music
         self.devices = devices
+        self.calendar = calendar
         self.events = events
         let screenMetrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
         self.layout = NotchGeometry.layout(for: screenMetrics, metrics: widgetSize.metrics)
@@ -375,7 +378,7 @@ final class NotchController {
             self?.files.setDragTargeted(targeted)
         }
 
-        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices, events: events)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices, calendar: calendar, events: events)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]

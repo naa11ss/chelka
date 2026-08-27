@@ -12,6 +12,9 @@ struct ExpandedContentView: View {
     @ObservedObject var metrics: MetricsService
     @ObservedObject var music: MusicService
     @ObservedObject var devices: DeviceBatteryReader
+    @ObservedObject var calendar: CalendarService
+    /// Тикает раз в минуту — «идёт сейчас» в повестке иначе устареет молча.
+    let clock: Date
 
     var body: some View {
         VStack(spacing: DS.cardSpacing) {
@@ -37,7 +40,7 @@ struct ExpandedContentView: View {
             // больше места, чем занимают три обычных индикатора.
             .frame(minHeight: 78)
 
-            ShelfCard(clipboard: clipboard, files: files)
+            ShelfCard(clipboard: clipboard, files: files, calendar: calendar, clock: clock)
         }
     }
 }

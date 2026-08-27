@@ -32,6 +32,12 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Без этого ключа обращение к EventKit не просто отказывает,
+	     а роняет приложение при первом же запросе доступа. -->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Чтобы показывать сегодняшние встречи прямо в вырезе. Данные никуда не отправляются и остаются на этом Mac.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Чтобы показывать сегодняшние встречи прямо в вырезе. Данные никуда не отправляются и остаются на этом Mac.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License</string>
 	<key>NSSupportsAutomaticTermination</key>

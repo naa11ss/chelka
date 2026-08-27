@@ -13,7 +13,13 @@ struct NotchRootView: View {
     @ObservedObject var metrics: MetricsService
     @ObservedObject var music: MusicService
     @ObservedObject var devices: DeviceBatteryReader
+    @ObservedObject var calendar: CalendarService
     @ObservedObject var events: SystemEventMonitor
+
+    /// Тикает раз в минуту, пока виджет раскрыт: «идёт сейчас» и «через
+    /// сколько» в повестке — про время, и без пересчёта устареют молча.
+    @State private var clock = Date()
+    private let minuteTicker = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -33,6 +39,12 @@ struct NotchRootView: View {
             alignment: .topLeading
         )
         .ignoresSafeArea()
+        .onReceive(minuteTicker) { now in
+            // Только пока виджет раскрыт: в свёрнутом состоянии повестку
+            // никто не видит, а таймер будил бы процессор впустую.
+            guard model.state == .expanded else { return }
+            clock = now
+        }
     }
 
     // MARK: - Событие в вырезе
@@ -110,7 +122,7 @@ struct NotchRootView: View {
             }
             .overlay {
                 if model.state == .expanded {
-                    ExpandedContentView(clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices)
+                    ExpandedContentView(clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices, calendar: calendar, clock: clock)
                         .padding(.horizontal, DS.flare + DS.contentPadding)
                         // Верхнюю полосу занимает сам вырез (или меню-бар):
                         // содержимое под ней физически не видно.

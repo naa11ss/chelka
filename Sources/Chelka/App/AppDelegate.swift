@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var fileShelfService: FileShelfService!
     private var eventMonitor: SystemEventMonitor!
     private var deviceBatteryReader: DeviceBatteryReader!
+    private var calendarService: CalendarService!
     private var metricsService: MetricsService!
     private var musicService: MusicService!
     private var notchController: NotchController!
@@ -24,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fileShelfService = FileShelfService()
         eventMonitor = SystemEventMonitor()
         deviceBatteryReader = DeviceBatteryReader()
+        calendarService = CalendarService()
         metricsService = MetricsService()
         // Настройки общие: разрешение ходить в сеть за обложкой лежит там же.
         musicService = MusicService(settings: clipboardService.settings)
@@ -35,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             metrics: metricsService,
             music: musicService,
             devices: deviceBatteryReader,
+            calendar: calendarService,
             events: eventMonitor
         )
         permissionsService = PermissionsService(clipboard: clipboardService, music: musicService)

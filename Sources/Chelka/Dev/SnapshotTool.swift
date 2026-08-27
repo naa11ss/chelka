@@ -96,6 +96,9 @@ enum SnapshotTool {
     private static let demoEvents = SystemEventMonitor()
     /// Не опрашивается: снимки не должны зависеть от того, какие наушники
     /// подключены к машине, на которой их рендерят.
+    /// Не активируется: снимки не должны трогать настоящий календарь
+    /// пользователя и тем более просить у него доступ.
+    private static let demoCalendar = CalendarService()
     private static let demoDevices: DeviceBatteryReader = {
         let reader = DeviceBatteryReader()
         reader.injectForPreview([
@@ -111,7 +114,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic, devices: demoDevices, events: demoEvents)
+            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic, devices: demoDevices, calendar: demoCalendar, events: demoEvents)
         }
 
         let hosting = NSHostingView(rootView: root)

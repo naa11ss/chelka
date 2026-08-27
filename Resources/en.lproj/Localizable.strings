@@ -16,6 +16,19 @@
 "card.system" = "System";
 "card.clipboard" = "Clipboard";
 "card.files" = "Files";
+"card.agenda" = "Day";
+
+/* Day agenda */
+"agenda.now" = "any moment";
+"agenda.inMinutes" = "in %d min";
+"agenda.inHours" = "in %d h";
+"agenda.inHoursMinutes" = "in %d h %d min";
+"agenda.allDay" = "All day";
+"agenda.running" = "happening now";
+"agenda.empty" = "Nothing scheduled today";
+"agenda.untitled" = "Untitled";
+"agenda.asking" = "Asking for Calendar access…";
+"agenda.denied" = "No Calendar access. System Settings → Privacy → Calendars.";
 
 /* Music */
 "music.nothing" = "Nothing playing";

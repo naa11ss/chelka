@@ -1,17 +1,21 @@
 import SwiftUI
 import ChelkaCore
 
-/// Нижняя карточка виджета: буфер обмена и полка файлов двумя вкладками.
+/// Нижняя карточка виджета: буфер обмена, полка файлов и сегодняшний день.
 ///
-/// Буфер открыт по умолчанию — он наполняется сам и нужен чаще; полка
-/// требует осознанного действия, туда заходят намеренно.
+/// Буфер открыт по умолчанию — он наполняется сам и нужен чаще; на полку
+/// и в день заходят намеренно.
 struct ShelfCard: View {
     @ObservedObject var clipboard: ClipboardService
     @ObservedObject var files: FileShelfService
+    @ObservedObject var calendar: CalendarService
+    /// Тикающие часы для повестки — «идёт сейчас» без пересчёта устареет.
+    let clock: Date
 
     enum Tab: Hashable {
         case clipboard
         case files
+        case agenda
     }
 
     @State private var tab: Tab = .clipboard
@@ -29,6 +33,8 @@ struct ShelfCard: View {
                 // Подсветка от любого из двух путей приёма: своего
                 // SwiftUI-drop и того, что приходит из AppKit-слоя.
                 FileShelfPane(service: files, isTargeted: isDropTargeted || files.isDragTargeted)
+            case .agenda:
+                AgendaPane(service: calendar, clock: clock)
             }
         }
         .padding(10)
@@ -63,6 +69,17 @@ struct ShelfCard: View {
             guard current > previous, tab != .files else { return }
             withAnimation(NotchAnimation.content) { tab = .files }
         }
+        // Доступ к календарю спрашивается при первом открытии вкладки,
+        // а не при запуске: выпрашивать его у того, кто про эту вкладку
+        // и не знает, незачем.
+        .onChange(of: tab) { _, current in
+            if current == .agenda {
+                calendar.activate()
+            } else {
+                calendar.deactivate()
+            }
+        }
+        .onDisappear { calendar.deactivate() }
     }
 
     /// `NSItemProvider` отдаёт адрес асинхронно — собираем все и кладём
@@ -106,6 +123,12 @@ struct ShelfCard: View {
                 title: T("card.files", "Файлы"),
                 systemImage: "folder",
                 count: files.shelf.items.count
+            )
+            tabButton(
+                .agenda,
+                title: T("card.agenda", "День"),
+                systemImage: "calendar",
+                count: calendar.events.count
             )
 
             Spacer(minLength: 8)
@@ -159,6 +182,19 @@ struct ShelfCard: View {
                     .foregroundStyle(Color.notchTertiary)
                     .help(T("files.remove", "Убрать с полки"))
                 }
+            }
+        case .agenda:
+            if let current = DayAgenda.current(calendar.events, now: clock) {
+                Text(current.title)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .lineLimit(1)
+            } else if let next = DayAgenda.next(calendar.events, now: clock),
+                      let startsIn = DayAgenda.startsIn(next, now: clock) {
+                Text("\(next.title) · \(startsIn)")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Color.notchTertiary)
+                    .lineLimit(1)
             }
         }
     }
