@@ -12,6 +12,7 @@ struct NotchRootView: View {
     @ObservedObject var files: FileShelfService
     @ObservedObject var metrics: MetricsService
     @ObservedObject var music: MusicService
+    @ObservedObject var devices: DeviceBatteryReader
     @ObservedObject var events: SystemEventMonitor
 
     var body: some View {
@@ -109,7 +110,7 @@ struct NotchRootView: View {
             }
             .overlay {
                 if model.state == .expanded {
-                    ExpandedContentView(clipboard: clipboard, files: files, metrics: metrics, music: music)
+                    ExpandedContentView(clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices)
                         .padding(.horizontal, DS.flare + DS.contentPadding)
                         // Верхнюю полосу занимает сам вырез (или меню-бар):
                         // содержимое под ней физически не видно.

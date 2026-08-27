@@ -26,6 +26,12 @@
 "music.playingIn" = "Playing in %@";
 "music.keys.needed" = "press a button to allow control";
 
+/* Connected devices */
+"device.left" = "Left";
+"device.right" = "Right";
+"device.case" = "Case";
+"device.charge" = "Charge";
+
 /* Notch events */
 "event.power.plugged" = "Charging";
 "event.power.unplugged" = "On battery";

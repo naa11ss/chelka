@@ -11,6 +11,7 @@ struct ExpandedContentView: View {
     @ObservedObject var files: FileShelfService
     @ObservedObject var metrics: MetricsService
     @ObservedObject var music: MusicService
+    @ObservedObject var devices: DeviceBatteryReader
 
     var body: some View {
         VStack(spacing: DS.cardSpacing) {
@@ -18,9 +19,19 @@ struct ExpandedContentView: View {
                 MusicCard(service: music)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                // Только когда наушники (или мышь, клавиатура) реально
+                // подключены и сообщают заряд: пустая рамка «устройств нет»
+                // отъедала бы место у музыки постоянно, а сказать ей нечего.
+                if let device = devices.devices.first(where: \.hasAnyLevel) {
+                    DeviceBatteryCard(device: device)
+                        .frame(width: 150)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+
                 MetricsCard(service: metrics)
                     .frame(width: 168)
             }
+            .animation(NotchAnimation.content, value: devices.devices)
             // Минимум, не фиксированная высота: карточка метрик растёт,
             // когда на Intel-маке есть вентиляторы и под регулятор нужно
             // больше места, чем занимают три обычных индикатора.

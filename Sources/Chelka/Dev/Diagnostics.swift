@@ -39,45 +39,30 @@ enum Diagnostics {
         exit(0)
     }
 
-    /// Что реестр IOKit сообщает о заряде подключённых устройств.
+    /// Заряд подключённых устройств — тем же путём, каким его читает
+    /// само приложение.
     ///
-    /// Публичного API для «сколько осталось в левом наушнике» macOS не даёт:
-    /// у `IOPSCopyPowerSourcesInfo` есть только сводная строка, а раздельные
-    /// значения лежат в реестре под недокументированными ключами, и набор
-    /// этих ключей разнится по моделям и прошивкам. Писать чтение вслепую,
-    /// по именам из интернета, — ровно та ошибка, которая на Intel-SMC
-    /// стоила целого круга удалённой отладки: сначала смотрим, что реально
-    /// отдаёт железо, потом пишем код под увиденное.
+    /// Через `system_profiler`, а не через реестр IOKit: раздельного заряда
+    /// наушников в реестре на macOS 26 нет вовсе — общеизвестные ключи
+    /// `BatteryPercentLeft`/`Right`/`Case` там больше не встречаются
+    /// (проверено на живой машине с подключёнными AirPods: ни одного такого
+    /// ключа во всём реестре, при том что сами наушники подключены и
+    /// `system_profiler` их заряд отдаёт).
     private static func printBluetoothBattery() {
         print("")
-        print("Заряд подключённых устройств (реестр IOKit):")
+        print("Заряд подключённых устройств (system_profiler):")
 
-        var found = 0
-        for service in registryServices(matching: "AppleDeviceManagementHIDEventService") {
-            defer { IOObjectRelease(service) }
-
-            var properties: Unmanaged<CFMutableDictionary>?
-            guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-                  let dictionary = properties?.takeRetainedValue() as? [String: Any]
-            else { continue }
-
-            // Показываем всё, что похоже на заряд, вместе с именем устройства —
-            // не угадывая заранее, какие именно ключи тут окажутся.
-            let batteryKeys = dictionary.keys.filter { $0.localizedCaseInsensitiveContains("battery") }.sorted()
-            guard !batteryKeys.isEmpty else { continue }
-
-            found += 1
-            let name = dictionary["Product"] as? String
-                ?? dictionary["BD_ADDR"].map { "\($0)" }
-                ?? "без имени"
-            print("    \(name)")
-            for key in batteryKeys {
-                print("        \(key) = \(dictionary[key] ?? "nil")")
-            }
+        let devices = DeviceBatteryReader.readNow()
+        if devices.isEmpty {
+            print("    ничего не найдено — подключите устройство и запустите снова")
         }
-
-        if found == 0 {
-            print("    ничего не найдено — подключите наушники и запустите снова")
+        for device in devices {
+            var parts: [String] = []
+            if let left = device.left { parts.append("левый \(left)%") }
+            if let right = device.right { parts.append("правый \(right)%") }
+            if let caseLevel = device.caseLevel { parts.append("кейс \(caseLevel)%") }
+            if let single = device.single { parts.append("заряд \(single)%") }
+            print("    \(device.name): \(parts.joined(separator: ", "))")
         }
 
         // Сводка от публичного API — для сравнения с тем, что выше.
@@ -87,20 +72,6 @@ enum Diagnostics {
             print("")
             print("Питание Mac (публичный IOPS): \(power.percent)%, \(source)\(note)")
         }
-    }
-
-    /// Перебор служб реестра по имени класса.
-    private static func registryServices(matching className: String) -> [io_service_t] {
-        var iterator: io_iterator_t = 0
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(className), &iterator) == KERN_SUCCESS
-        else { return [] }
-        defer { IOObjectRelease(iterator) }
-
-        var services: [io_service_t] = []
-        while case let service = IOIteratorNext(iterator), service != 0 {
-            services.append(service)
-        }
-        return services
     }
 
     private static func printSensors() {

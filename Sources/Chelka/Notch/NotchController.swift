@@ -77,6 +77,7 @@ final class NotchController {
     private let files: FileShelfService
     private let metrics: MetricsService
     private let music: MusicService
+    private let devices: DeviceBatteryReader
     private let events: SystemEventMonitor
 
     init(
@@ -86,6 +87,7 @@ final class NotchController {
         files: FileShelfService,
         metrics: MetricsService,
         music: MusicService,
+        devices: DeviceBatteryReader,
         events: SystemEventMonitor
     ) {
         self.theme = theme
@@ -94,6 +96,7 @@ final class NotchController {
         self.files = files
         self.metrics = metrics
         self.music = music
+        self.devices = devices
         self.events = events
         let screenMetrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
         self.layout = NotchGeometry.layout(for: screenMetrics, metrics: widgetSize.metrics)
@@ -329,7 +332,7 @@ final class NotchController {
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
 
-        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music, events: events)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music, devices: devices, events: events)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -539,9 +542,11 @@ final class NotchController {
         if stateMachine.state == .expanded {
             metrics.startSampling()
             music.startPolling()
+            devices.startPolling()
         } else {
             metrics.stopSampling()
             music.stopPolling()
+            devices.stopPolling()
             // Выбор записей не должен пережить сворачивание — иначе Delete/⌫
             // и Cmd+Z остаются глобально перехваченными для виджета, который
             // пользователь уже не видит и не собирался трогать.

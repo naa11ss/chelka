@@ -94,6 +94,15 @@ enum SnapshotTool {
     /// Не запускается: снимкам не нужны настоящие события питания и сети,
     /// а плашка рисуется только когда событие есть.
     private static let demoEvents = SystemEventMonitor()
+    /// Не опрашивается: снимки не должны зависеть от того, какие наушники
+    /// подключены к машине, на которой их рендерят.
+    private static let demoDevices: DeviceBatteryReader = {
+        let reader = DeviceBatteryReader()
+        reader.injectForPreview([
+            DeviceBattery(name: "AirPods Pro", left: 100, right: 95, caseLevel: 51)
+        ])
+        return reader
+    }()
 
     private static func render(_ testCase: Case, to url: URL) -> Bool {
         let layout = NotchGeometry.layout(for: testCase.metrics)
@@ -102,7 +111,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic, events: demoEvents)
+            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic, devices: demoDevices, events: demoEvents)
         }
 
         let hosting = NSHostingView(rootView: root)
