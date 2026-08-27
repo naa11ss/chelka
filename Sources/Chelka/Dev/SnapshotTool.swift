@@ -91,6 +91,9 @@ enum SnapshotTool {
     private static let demoFiles = FileShelfService(defaults: UserDefaults(suiteName: "chelka.demo")!)
     private static let demoMetrics = MetricsService()
     private static let demoMusic = MusicService(settings: ClipboardSettings())
+    /// Не запускается: снимкам не нужны настоящие события питания и сети,
+    /// а плашка рисуется только когда событие есть.
+    private static let demoEvents = SystemEventMonitor()
 
     private static func render(_ testCase: Case, to url: URL) -> Bool {
         let layout = NotchGeometry.layout(for: testCase.metrics)
@@ -99,7 +102,7 @@ enum SnapshotTool {
 
         let size = layout.panelFrame.size
         let root = SnapshotBackdrop {
-            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic)
+            NotchRootView(model: model, clipboard: demoClipboard, files: demoFiles, metrics: demoMetrics, music: demoMusic, events: demoEvents)
         }
 
         let hosting = NSHostingView(rootView: root)

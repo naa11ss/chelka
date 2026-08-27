@@ -26,6 +26,15 @@
 "music.playingIn" = "Playing in %@";
 "music.keys.needed" = "press a button to allow control";
 
+/* Notch events */
+"event.power.plugged" = "Charging";
+"event.power.unplugged" = "On battery";
+"event.battery.low" = "Battery running low";
+"event.network.online" = "Back online";
+"event.network.offline" = "No network";
+"event.network.ethernet" = "Ethernet";
+"event.network.cellular" = "Cellular";
+
 /* Metrics */
 "metrics.heat" = "Heat";
 "thermal.nominal" = "normal";

@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var widgetSizeController: WidgetSizeController!
     private var clipboardService: ClipboardService!
     private var fileShelfService: FileShelfService!
+    private var eventMonitor: SystemEventMonitor!
     private var metricsService: MetricsService!
     private var musicService: MusicService!
     private var notchController: NotchController!
@@ -20,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         widgetSizeController = WidgetSizeController()
         clipboardService = ClipboardService()
         fileShelfService = FileShelfService()
+        eventMonitor = SystemEventMonitor()
         metricsService = MetricsService()
         // Настройки общие: разрешение ходить в сеть за обложкой лежит там же.
         musicService = MusicService(settings: clipboardService.settings)
@@ -29,7 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             clipboard: clipboardService,
             files: fileShelfService,
             metrics: metricsService,
-            music: musicService
+            music: musicService,
+            events: eventMonitor
         )
         permissionsService = PermissionsService(clipboard: clipboardService, music: musicService)
         settingsWindow = SettingsWindowController(
@@ -49,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         clipboardService.start()
         musicService.start()
+        eventMonitor.start()
         notchController.start()
 
         // ⌥⌘V открывает виджет на истории буфера.
@@ -98,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PrivilegedFanWriter.shutdown()
         clipboardService?.stop()
         musicService?.stop()
+        eventMonitor?.stop()
         notchController?.stop()
         Log.app.info("Chelka завершается")
     }

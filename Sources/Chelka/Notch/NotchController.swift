@@ -77,6 +77,7 @@ final class NotchController {
     private let files: FileShelfService
     private let metrics: MetricsService
     private let music: MusicService
+    private let events: SystemEventMonitor
 
     init(
         theme: ThemeController,
@@ -84,7 +85,8 @@ final class NotchController {
         clipboard: ClipboardService,
         files: FileShelfService,
         metrics: MetricsService,
-        music: MusicService
+        music: MusicService,
+        events: SystemEventMonitor
     ) {
         self.theme = theme
         self.widgetSize = widgetSize
@@ -92,6 +94,7 @@ final class NotchController {
         self.files = files
         self.metrics = metrics
         self.music = music
+        self.events = events
         let screenMetrics = NSScreen.chelkaTarget?.chelkaMetrics ?? Self.fallbackMetrics
         self.layout = NotchGeometry.layout(for: screenMetrics, metrics: widgetSize.metrics)
         self.viewModel = NotchViewModel(layout: layout)
@@ -326,7 +329,7 @@ final class NotchController {
         let container = PassThroughContentView(frame: CGRect(origin: .zero, size: layout.panelFrame.size))
         container.autoresizingMask = [.width, .height]
 
-        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music)
+        let root = NotchRootView(model: viewModel, clipboard: clipboard, files: files, metrics: metrics, music: music, events: events)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]

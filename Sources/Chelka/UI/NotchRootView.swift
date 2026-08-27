@@ -12,6 +12,7 @@ struct NotchRootView: View {
     @ObservedObject var files: FileShelfService
     @ObservedObject var metrics: MetricsService
     @ObservedObject var music: MusicService
+    @ObservedObject var events: SystemEventMonitor
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -22,6 +23,8 @@ struct NotchRootView: View {
             surface
                 .frame(width: surfaceRect.width, height: surfaceRect.height)
                 .offset(x: surfaceRect.minX, y: surfaceRect.minY)
+
+            eventPill
         }
         .frame(
             width: model.layout.panelFrame.width,
@@ -29,6 +32,47 @@ struct NotchRootView: View {
             alignment: .topLeading
         )
         .ignoresSafeArea()
+    }
+
+    // MARK: - Событие в вырезе
+
+    /// Короткое сообщение под вырезом, пока виджет свёрнут.
+    ///
+    /// Только в свёрнутом виде: раскрытый виджет и так на экране, дублировать
+    /// в нём заряд и сеть незачем. Плашка рисуется по центру под вырезом,
+    /// а не по обе стороны от него: раскладывать содержимое вокруг
+    /// физического выреза значит привязаться к его ширине на конкретной
+    /// модели, а она разная (168 pt на Air, 209 pt на Pro).
+    @ViewBuilder
+    private var eventPill: some View {
+        if model.state == .collapsed, let event = events.current {
+            let anchor = model.layout.collapsedRectInSwiftUI
+
+            HStack(spacing: 5) {
+                Image(systemName: event.symbol)
+                    .font(.system(size: 9, weight: .semibold))
+                Text(event.title)
+                    .font(.system(size: 10, weight: .medium))
+                if let detail = event.detail {
+                    Text(detail)
+                        .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.notchPrimary)
+                }
+            }
+            .foregroundStyle(Color.notchSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.notchSurface, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.notchStroke, lineWidth: 1))
+            .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+            .fixedSize()
+            // По центру выреза и чуть ниже него — в пустую середину
+            // меню-бара, ту же, куда свисает зона наведения.
+            .frame(width: model.layout.panelFrame.width, alignment: .center)
+            .offset(y: anchor.maxY + 6)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(NotchAnimation.morph, value: event.id)
+        }
     }
 
     // MARK: - Слои
